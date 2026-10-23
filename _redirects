@@ -1,0 +1,5 @@
+# Redirecionamentos amigáveis para Netlify - Salgados VIP
+/admin       /admin.html      200
+/cozinha     /admin.html      200
+/cardapio    /index.html      200
+/pedidos     /index.html      200

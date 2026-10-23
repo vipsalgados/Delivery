@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Salgados VIP - Redirecionando...</title>
+  <link rel="icon" type="image/png" href="favicon.png">
+  <script>
+    (function() {
+      var path = window.location.pathname.toLowerCase();
+      // Redirecionamentos amigáveis para GitHub Pages
+      if (path.indexOf('/admin') !== -1 || path.indexOf('/cozinha') !== -1) {
+        window.location.replace('./admin.html');
+      } else if (path.indexOf('/cardapio') !== -1 || path.indexOf('/pedidos') !== -1) {
+        window.location.replace('./index.html');
+      }
+    })();
+  </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #0f172a;
+      color: #f8fafc;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      text-align: center;
+    }
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 16px;
+      padding: 2.5rem 2rem;
+      max-width: 440px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      margin: 1rem;
+    }
+    .emoji { font-size: 3.5rem; margin-bottom: 1rem; }
+    h1 { margin: 0 0 0.5rem; font-size: 1.5rem; font-weight: 800; color: #f8fafc; }
+    p { margin: 0 0 1.5rem; color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
+    .btn-group { display: flex; flex-direction: column; gap: 10px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .btn-primary { background: #dc2626; color: #fff; }
+    .btn-primary:hover { background: #b91c1c; transform: translateY(-1px); }
+    .btn-secondary { background: #334155; color: #f8fafc; border: 1px solid #475569; }
+    .btn-secondary:hover { background: #475569; transform: translateY(-1px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="emoji">🥟</div>
+    <h1>Salgados VIP Nova Iguaçu</h1>
+    <p>A página que você tentou acessar não foi encontrada ou mudou de endereço.</p>
+    <div class="btn-group">
+      <a href="./index.html" class="btn btn-primary">📱 Abrir Cardápio Delivery</a>
+      <a href="./admin.html" class="btn btn-secondary">👨‍🍳 Painel Admin / Cozinha</a>
+    </div>
+  </div>
+</body>
+</html>

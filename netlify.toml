@@ -1,0 +1,43 @@
+# Configurações do Netlify para Salgados VIP Delivery (PWA & Painel)
+
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/cozinha"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/cardapio"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/pedidos"
+  to = "/index.html"
+  status = 200
+
+# Garantir que o Service Worker nunca fique preso em cache de CDN
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Content-Type = "application/javascript; charset=utf-8"
+
+# Manifests PWA (Cliente e Admin Separados)
+[[headers]]
+  for = "/manifest*.json"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+    Content-Type = "application/manifest+json; charset=utf-8"
+
+# Segurança padrão
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "SAMEORIGIN"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
