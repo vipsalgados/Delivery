@@ -2209,7 +2209,7 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
     printedAt: null
   };
 
-  const savedOrder = VIPDatabase.addOrder(orderObj);
+  const savedOrder = await VIPDatabase.addOrder(orderObj);
 
   // MEMÓRIA INTELIGENTE: Salvar perfil do cliente (1 única vez, sem senhas)
   const custProfile = {

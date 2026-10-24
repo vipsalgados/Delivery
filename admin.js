@@ -509,7 +509,14 @@ function initOrdersWatcher() {
   }
 
   if (!liveOrdersInterval) {
-    liveOrdersInterval = setInterval(() => {
+    liveOrdersInterval = setInterval(async () => {
+      // 1. Sincroniza ativamente com a Nuvem Supabase (garantia total de recebimento mesmo com oscilações no Realtime)
+      if (typeof VIPDatabase.syncOrdersFromSupabase === "function") {
+        try {
+          await VIPDatabase.syncOrdersFromSupabase();
+        } catch(e) {}
+      }
+      // 2. Verifica novos pedidos e atualiza timers
       checkIncomingLiveOrders();
       updateLiveElapsedTimers();
     }, 3500);
@@ -518,6 +525,20 @@ function initOrdersWatcher() {
   // Sincronização entre abas e eventos do Supabase Realtime (registrados apenas uma vez)
   if (!window._adminWatcherEventsBound) {
     window._adminWatcherEventsBound = true;
+
+    // Canal Broadcast para comunicação instantânea entre abas no mesmo navegador
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        const bc = new BroadcastChannel("salgados_vip_bus");
+        bc.onmessage = (ev) => {
+          if (ev.data && ev.data.type === "NEW_ORDER") {
+            console.log("[BroadcastChannel] Pedido recebido instantaneamente via barramento local:", ev.data.order?.id);
+            checkIncomingLiveOrders();
+            renderLiveOrders();
+          }
+        };
+      } catch(e) {}
+    }
 
     window.removeEventListener("storage", handleOrdersStorageEvent);
     window.addEventListener("storage", handleOrdersStorageEvent);
@@ -965,6 +986,12 @@ let onlyDelayedOrdersFilter = false;
 // Verifica se o pedido pertence ao dia de hoje
 function isOrderFromToday(order) {
   if (!order) return false;
+
+  // REGRA CRÍTICA: Pedidos ativos em aberto (novo, em_preparo, pronto) DEVEM sempre aparecer no Kanban para a cozinha não perder!
+  if (order.status === "novo" || order.status === "em_preparo" || order.status === "pronto") {
+    return true;
+  }
+
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
@@ -1270,6 +1297,7 @@ function renderKanbanCard(order) {
   const card = document.createElement("div");
   card.className = `kanban-card ${timing.isDelayed ? "is-delayed" : ""}`;
   card.id = `order-card-${order.id}`;
+  card.setAttribute("data-order-id", order.id);
   card.draggable = true;
   card.setAttribute("ondragstart", `onKanbanDragStart(event, '${order.id}')`);
   card.setAttribute("ondragend", "onKanbanDragEnd(event)");

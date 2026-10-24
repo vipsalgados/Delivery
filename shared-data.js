@@ -1445,9 +1445,21 @@ const VIPDatabase = {
   saveOrders(orders) {
     localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
   },
+  generateOrderId() {
+    const orders = this.getOrders();
+    let maxNum = 100;
+    orders.forEach(o => {
+      const match = String(o.id || o.orderId || "").match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum && num < 999999) maxNum = num;
+      }
+    });
+    return `VIP-${maxNum + 1}`;
+  },
   addOrder(order) {
     const orders = this.getOrders();
-    const id = order.id || order.orderId || `VIP-${Math.floor(100 + Math.random() * 900)}`;
+    const id = order.id || order.orderId || this.generateOrderId();
     const newOrder = {
       ...order,
       id,
@@ -1462,6 +1474,17 @@ const VIPDatabase = {
     };
     orders.unshift(newOrder);
     this.saveOrders(orders);
+
+    // Broadcast imediato para abas locais (Admin na mesma máquina/navegador)
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        const bc = new BroadcastChannel("salgados_vip_bus");
+        bc.postMessage({ type: "NEW_ORDER", order: newOrder });
+        bc.close();
+      } catch(e) {}
+    }
+
+    // Envia para a Nuvem Supabase
     this.pushOrderToSupabase(newOrder);
     return newOrder;
   },
@@ -2872,22 +2895,27 @@ const VIPDatabase = {
     });
   },
 
-  pushOrderToSupabase(order) {
+  async pushOrderToSupabase(order) {
     const sb = getSupabaseClient();
-    if (!sb) return;
-    sb.from("orders").upsert({
+    if (!sb) {
+      console.warn("[Supabase] Cliente não inicializado para envio de pedido.");
+      return null;
+    }
+
+    const payload = {
       id: order.id,
       order_id: order.orderId || order.id,
       created_at: order.createdAt || Date.now(),
       customer: order.customer || {},
       fulfillment: order.fulfillment || "Entrega",
       items: order.items || [],
-      subtotal: order.subtotal || 0,
-      delivery_fee: order.deliveryFee || 0,
-      total_amount: order.totalAmount || order.total || 0,
+      subtotal: parseFloat(order.subtotal || 0),
+      delivery_fee: parseFloat(order.deliveryFee || 0),
+      total_amount: parseFloat(order.totalAmount || order.total || 0),
       payment_method: order.paymentMethod || "Não informado",
       cash_change_for: order.cashChangeFor || null,
       pix_code: order.pixCode || null,
+      delivery_man: order.deliveryMan || null,
       status: order.status || "novo",
       printed: !!order.printed,
       printed_at: order.printedAt || null,
@@ -2896,18 +2924,116 @@ const VIPDatabase = {
       scheduled_time: order.scheduledTime || null,
       scheduled_date_time_formatted: order.scheduledDateTimeFormatted || null,
       history: order.history || []
-    }).then(({ error }) => {
-      if (error) console.warn("[Supabase] Erro ao salvar pedido na nuvem:", error);
-    });
+    };
+
+    try {
+      const { data, error } = await sb.from("orders").upsert(payload).select().single();
+      if (error) {
+        console.warn("[Supabase] Aviso no envio do pedido, tentando payload seguro:", error);
+        const safePayload = { ...payload };
+        delete safePayload.pix_code;
+        delete safePayload.delivery_man;
+        const { data: fbData, error: fbErr } = await sb.from("orders").upsert(safePayload).select().single();
+        if (fbErr) {
+          console.error("[Supabase] Erro ao salvar pedido na nuvem:", fbErr);
+          return null;
+        }
+        return fbData;
+      }
+      console.log("[Supabase] Pedido sincronizado na nuvem com sucesso:", order.id);
+      return data;
+    } catch (err) {
+      console.error("[Supabase] Exceção ao salvar pedido na nuvem:", err);
+      return null;
+    }
   },
 
-  pushOrderStatusToSupabase(orderId, status, history) {
+  async syncOrdersFromSupabase() {
+    const sb = getSupabaseClient();
+    if (!sb) return this.getOrders();
+
+    try {
+      const { data: ordersData, error } = await sb
+        .from("orders")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(200);
+
+      if (error) {
+        console.warn("[Supabase] Falha ao sincronizar pedidos:", error);
+        return this.getOrders();
+      }
+
+      if (ordersData && Array.isArray(ordersData)) {
+        const localOrders = this.getOrders();
+        const localMap = new Map(localOrders.map(o => [o.id, o]));
+        let hasChanges = false;
+        let newOrdersFound = [];
+
+        ordersData.forEach(o => {
+          const mapped = {
+            ...o,
+            id: o.id || o.order_id,
+            orderId: o.order_id || o.id,
+            createdAt: parseInt(o.created_at) || Date.now(),
+            subtotal: parseFloat(o.subtotal || 0),
+            deliveryFee: parseFloat(o.delivery_fee || 0),
+            totalAmount: parseFloat(o.total_amount || 0),
+            total: parseFloat(o.total_amount || 0),
+            paymentMethod: o.payment_method,
+            cashChangeFor: o.cash_change_for,
+            pixCode: o.pix_code || o.pixCode || null,
+            deliveryMan: o.delivery_man || o.deliveryMan || null,
+            timingType: o.timing_type || "imediato",
+            scheduledDate: o.scheduled_date,
+            scheduledTime: o.scheduled_time,
+            scheduledDateTimeFormatted: o.scheduled_date_time_formatted,
+            printedAt: o.printed_at ? parseInt(o.printed_at) : null
+          };
+
+          if (!localMap.has(mapped.id)) {
+            hasChanges = true;
+            newOrdersFound.push(mapped);
+            localMap.set(mapped.id, mapped);
+          } else {
+            const existing = localMap.get(mapped.id);
+            if (existing.status !== mapped.status || (mapped.deliveryMan && !existing.deliveryMan)) {
+              hasChanges = true;
+              localMap.set(mapped.id, { ...existing, ...mapped });
+            }
+          }
+        });
+
+        if (hasChanges) {
+          const mergedList = Array.from(localMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(mergedList));
+
+          if (newOrdersFound.length > 0) {
+            newOrdersFound.forEach(newOrd => {
+              window.dispatchEvent(new CustomEvent("vip_order_received", { detail: newOrd }));
+            });
+          }
+          window.dispatchEvent(new CustomEvent("vip_orders_updated", { detail: { event: "SYNC" } }));
+        }
+      }
+      return this.getOrders();
+    } catch (e) {
+      console.warn("[Supabase] Erro ao sincronizar pedidos:", e);
+      return this.getOrders();
+    }
+  },
+
+  pushOrderStatusToSupabase(orderId, status, history, deliveryMan) {
     const sb = getSupabaseClient();
     if (!sb) return;
-    sb.from("orders").update({
+    const updates = {
       status: status,
       history: history || []
-    }).eq("id", orderId).then(({ error }) => {
+    };
+    if (deliveryMan !== undefined) {
+      updates.delivery_man = deliveryMan;
+    }
+    sb.from("orders").update(updates).eq("id", orderId).then(({ error }) => {
       if (error) console.warn("[Supabase] Erro ao atualizar status:", error);
     });
   },
