@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Salgados VIP - Nova Iguaçu | Cardápio & Delivery</title>
+
+  <!-- PWA & Mobile Web App Meta Tags -->
+  <meta name="theme-color" content="#d97706">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Salgados VIP">
+  <meta name="description" content="Cardápio digital e delivery de salgados fritos artesanais, kits para festas e bebidas em Nova Iguaçu - RJ">
+  <link rel="manifest" href="manifest-cliente.json">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+  <link rel="shortcut icon" href="favicon.png">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="pwa.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+
+  <!-- Top Hero Header -->
+  <header class="vip-header">
+    <div class="vip-header-overlay"></div>
+    <div class="header-container">
+      <div id="store-status-badge" class="status-badge checking">
+        <span class="status-pulse"></span>
+        <span id="store-status-text">Verificando horário...</span>
+      </div>
+      
+      <div class="store-branding-header">
+        <div id="store-logo-wrapper" class="store-logo-wrapper" style="display: none;">
+          <img id="store-logo-img" src="" alt="Logo do Estabelecimento" class="store-logo-img">
+        </div>
+        <div class="store-branding-text">
+          <h1 class="vip-brand-name" id="display-store-name">Salgados VIP</h1>
+          <p class="vip-brand-location" id="display-store-location"><i class="fa-solid fa-location-dot"></i> Nova Iguaçu - Rio de Janeiro</p>
+        </div>
+      </div>
+      
+      <div class="store-info-cards">
+        <div class="info-pill">
+          <i class="fa-regular fa-clock"></i>
+          <span>Todos os dias: <strong>16:00 – 22:30</strong></span>
+        </div>
+        <div class="info-pill">
+          <i class="fa-solid fa-store"></i>
+          <span>Retirada: <strong>Rua Isabel Pedrosa, 31, Da Luz</strong></span>
+        </div>
+        <button type="button" id="header-pwa-install-btn" class="pwa-header-install-btn" onclick="triggerInstallPrompt()" title="Instalar aplicativo Salgados VIP na tela inicial">
+          <i class="fa-solid fa-mobile-screen-button"></i> <span>Instalar App</span>
+        </button>
+      </div>
+    </div>
+  </header>
+ 
+  <!-- Barra de Navegação Rápida de Categorias -->
+  <nav class="category-nav-bar" id="category-nav-bar">
+    <div class="category-nav-container" id="category-nav-container">
+      <a href="#section-kits" class="category-nav-pill active"><i class="fa-solid fa-boxes-stacked"></i> Kits de Salgados</a>
+      <!-- Outras categorias ativas inseridas via JS -->
+    </div>
+  </nav>
+
+  <!-- Main Content: Identificação do Cliente, Último Pedido, Combos, Kits & Categorias -->
+  <main class="container">
+    <!-- BARRA DE SAUDAÇÃO & LOGIN FÁCIL DO CLIENTE (MEMÓRIA INTELIGENTE) -->
+    <section class="customer-welcome-section" id="customer-welcome-section">
+      <!-- Inserido dinamicamente via JS -->
+    </section>
+
+    <!-- CARD DO ÚLTIMO PEDIDO (RECOMPRA COM 1 CLIQUE) -->
+    <section class="customer-last-order-section" id="customer-last-order-section" style="display: none;">
+      <!-- Inserido dinamicamente via JS se houver histórico -->
+    </section>
+
+    <!-- Seção de Combos Promocionais com Desconto Real -->
+    <section id="section-combos" class="section-combos" style="margin-bottom: 2.5rem;">
+      <div class="section-intro">
+        <span class="category-badge-heading promo"><i class="fa-solid fa-fire-flame-curved"></i> Super Combos Promocionais</span>
+        <h2>Combos com Desconto Real</h2>
+        <p>Aproveite nossos combos completos com salgadinhos, refrigerantes e molhos especiais com economia garantida!</p>
+      </div>
+      <div class="combos-grid" id="combos-grid">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+    </section>
+
+    <section id="section-kits">
+      <div class="section-intro">
+        <h2>Escolha seu Kit de Salgadinhos</h2>
+        <p>Selecione a quantidade desejada e monte os sabores do seu jeito!</p>
+      </div>
+      <div class="kits-grid" id="kits-grid">
+        <!-- Renderizado dinamicamente via JS -->
+      </div>
+    </section>
+
+    <!-- Container Dinâmico de Categorias Adicionais (Bebidas, Sobremesas, etc.) -->
+    <div id="custom-categories-container">
+      <!-- Renderizado dinamicamente via JS -->
+    </div>
+  </main>
+
+  <!-- MODAL DE PERSONALIZAÇÃO DO KIT (DISTRIBUIÇÃO DE SABORES) -->
+  <div class="modal-backdrop" id="customizer-backdrop"></div>
+  <aside class="customizer-modal" id="customizer-modal">
+    <div class="modal-top">
+      <div>
+        <span class="customizer-pre-title">Montando seu</span>
+        <h2 id="modal-kit-name">Kit de Salgados</h2>
+        <div class="modal-kit-base-price" id="modal-kit-base-price">R$ 0,00</div>
+      </div>
+      <button class="btn-close-customizer" id="btn-close-customizer" aria-label="Fechar">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <!-- Barra de Progresso e Validação -->
+    <div class="progress-container" id="progress-container">
+      <div class="progress-info-row">
+        <span class="progress-status-label" id="progress-text">Selecionados: 0 de 0</span>
+        <span class="progress-remaining-badge" id="remaining-text">Restam: 0</span>
+      </div>
+      <div class="progress-bar-track">
+        <div class="progress-bar-fill" id="progress-fill" style="width: 0%"></div>
+      </div>
+      <div class="alert-limit-msg" id="alert-limit-msg" style="display: none;"></div>
+    </div>
+
+    <!-- Conteúdo Roolável do Modal -->
+    <div class="modal-scroll-area">
+      <!-- 1. Distribuição de Sabores -->
+      <div class="customizer-step-header">
+        <span class="step-num">Passo 1</span>
+        <h3>Distribua os Sabores do seu Kit</h3>
+      </div>
+
+      <!-- Barra de Busca Rápida e Filtros de Sabores -->
+      <div class="flavor-search-filter-bar">
+        <div class="flavor-search-input-wrapper">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input type="text" id="flavor-search-input" placeholder="Buscar sabor (ex: coxinha, queijo, camarão...)" oninput="filterFlavorsList(this.value)">
+          <button type="button" id="btn-clear-flavor-search" class="btn-clear-search" onclick="clearFlavorSearch()" style="display: none;" title="Limpar busca">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
+        </div>
+        <div class="flavor-filter-tags">
+          <button type="button" class="flavor-filter-tag active" data-filter="all" onclick="setFlavorCategoryFilter('all')">Todos</button>
+          <button type="button" class="flavor-filter-tag" data-filter="selected" onclick="setFlavorCategoryFilter('selected')">Selecionados (<span id="count-selected-flavors">0</span>)</button>
+          <button type="button" class="flavor-filter-tag" data-filter="tradicionais" onclick="setFlavorCategoryFilter('tradicionais')">Tradicionais</button>
+          <button type="button" class="flavor-filter-tag" data-filter="especiais" onclick="setFlavorCategoryFilter('especiais')">Especiais (+)</button>
+        </div>
+      </div>
+
+      <div class="flavors-container" id="flavors-list-container">
+        <!-- Inserido dinamicamente via JS com dados do catálogo -->
+      </div>
+
+      <!-- 2. Sugestão Estratégica de Molhos Especiais (Aumento de Ticket Médio) -->
+      <div class="sauces-upsell-module" id="sauces-upsell-module">
+        <div class="upsell-banner-head">
+          <span class="upsell-pill"><i class="fa-solid fa-sparkles"></i> Sugestão do Chef • Aumente sua experiência</span>
+          <h4>Que tal adicionar molhos especiais ao seu kit?</h4>
+          <p>Mergulhe seus salgadinhos fritos na hora nos melhores molhos e maioneses da casa!</p>
+        </div>
+        <div class="sauces-upsell-grid" id="sauces-suggestion-grid">
+          <!-- Renderizado dinamicamente com botões de adicionar -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Rodapé do Modal com Resumo de Adicionais e Ação -->
+    <div class="modal-bottom">
+      <div class="customizer-totals">
+        <div class="customizer-extra-row" id="customizer-extra-row" style="display: none;">
+          <span>Adicionais especiais:</span>
+          <span id="customizer-extra-value">+ R$ 0,00</span>
+        </div>
+        <div class="customizer-total-row">
+          <span>Total deste Kit:</span>
+          <strong id="customizer-total-price">R$ 0,00</strong>
+        </div>
+      </div>
+      <button class="btn-confirm-kit disabled" id="btn-confirm-kit" disabled>
+        <span id="btn-confirm-text">Complete os salgadinhos para continuar</span>
+        <i class="fa-solid fa-arrow-right"></i>
+      </button>
+    </div>
+  </aside>
+
+  <!-- BARRA FLUTUANTE DE RESUMO DO PEDIDO (CARD DA SACOLA) -->
+  <div class="floating-cart-bar" id="floating-cart-bar" style="display: none;">
+    <div class="cart-bar-left">
+      <div class="cart-badge-bubble" id="bar-items-count">0</div>
+      <div>
+        <div class="cart-bar-sub">Total da Sacola</div>
+        <div class="cart-bar-price" id="bar-items-total">R$ 0,00</div>
+      </div>
+    </div>
+    <button class="btn-open-cart-drawer" id="btn-open-cart-drawer">
+      Ver Sacola <i class="fa-solid fa-basket-shopping"></i>
+    </button>
+  </div>
+
+  <!-- GAVETA LATERAL DO CARRINHO (CHECKOUT) -->
+  <div class="modal-backdrop" id="checkout-backdrop"></div>
+  <aside class="checkout-drawer" id="checkout-drawer">
+    <div class="drawer-header">
+      <div class="drawer-header-left">
+        <div id="drawer-logo-wrapper" class="drawer-logo-wrapper" style="display: none;">
+          <img id="drawer-logo-img" src="" alt="Logo" class="drawer-logo-img">
+        </div>
+        <div>
+          <h2><i class="fa-solid fa-receipt"></i> Seu Pedido</h2>
+          <span class="drawer-store-sub" id="drawer-store-name">Salgados VIP</span>
+        </div>
+      </div>
+      <button class="btn-close-drawer" id="btn-close-drawer"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="drawer-body">
+      <!-- Lista de Itens Adicionados -->
+      <div class="order-items-container" id="order-items-container">
+        <!-- Renderizado dinamicamente -->
+      </div>
+
+      <!-- Formulário de Finalização -->
+      <form class="checkout-form" id="checkout-form" onsubmit="return false;">
+        <h3 class="form-section-title"><i class="fa-solid fa-user-check"></i> Dados para o Pedido</h3>
+        
+        <div class="form-group">
+          <label for="cust-name">Seu Nome Completo *</label>
+          <input type="text" id="cust-name" placeholder="Ex: Rodrigo Silva" required>
+        </div>
+
+        <div class="form-group">
+          <label for="cust-phone">WhatsApp para Acompanhamento *</label>
+          <input type="tel" id="cust-phone" placeholder="Ex: (21) 98765-4321" maxlength="15" oninput="maskPhoneInput(this)" required>
+        </div>
+
+        <div class="form-group">
+          <label>Opção de Pedido *</label>
+          <div class="segmented-control">
+            <label class="seg-item">
+              <input type="radio" name="order-fulfillment" value="Entrega" checked>
+              <span><i class="fa-solid fa-motorcycle"></i> Entrega</span>
+            </label>
+            <label class="seg-item">
+              <input type="radio" name="order-fulfillment" value="Retirada">
+              <span><i class="fa-solid fa-store"></i> Retirada no Local</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Endereço se for entrega: CEP (busca na web), Rua, Número, Bairro, Município, Complemento -->
+        <div class="delivery-address-container" id="delivery-address-group">
+          <!-- Campo CEP (Preenchimento Automático na Web) -->
+          <div class="cep-search-container">
+            <div class="form-group" style="margin-bottom: 0;">
+              <div class="cep-label-row">
+                <label for="cust-cep"><i class="fa-solid fa-map-location-dot"></i> CEP (Preenchimento Automático)</label>
+                <span class="cep-auto-badge"><i class="fa-solid fa-bolt"></i> Busca na web</span>
+              </div>
+              <div class="cep-input-group">
+                <input type="text" id="cust-cep" placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="postal-code" oninput="onCepInput(this)" onblur="onCepBlur(this)">
+                <button type="button" class="btn-cep-search" id="btn-search-cep" onclick="searchAddressByCep()" title="Buscar endereço na web pelo CEP">
+                  <i class="fa-solid fa-magnifying-glass"></i> <span id="btn-search-cep-text">Buscar CEP</span>
+                </button>
+              </div>
+              <div id="cep-feedback-status" class="cep-feedback-status" style="display: none;"></div>
+            </div>
+          </div>
+
+          <!-- 1. Endereço (Rua) e 2. Número -->
+          <div class="address-inputs-grid">
+            <div class="form-group grid-item-street">
+              <label for="cust-street"><i class="fa-solid fa-road"></i> 1. Endereço (Rua / Logradouro) *</label>
+              <input type="text" id="cust-street" placeholder="Ex: Rua Getúlio Vargas" oninput="onCustomerAddressFieldChange()" onchange="onCustomerAddressFieldChange()" required>
+            </div>
+            <div class="form-group grid-item-number">
+              <label for="cust-number"><i class="fa-solid fa-hashtag"></i> 2. Número da Residência *</label>
+              <input type="text" id="cust-number" placeholder="Ex: 277" oninput="onCustomerAddressFieldChange()" onchange="onCustomerAddressFieldChange()" required>
+            </div>
+          </div>
+
+          <!-- 3. Bairro e 4. Município -->
+          <div class="address-inputs-grid">
+            <div class="form-group grid-item-bairro">
+              <label for="cust-neighborhood-input"><i class="fa-solid fa-map-pin"></i> 3. Bairro (Cálculo Automático) *</label>
+              <input type="text" id="cust-neighborhood-input" placeholder="Digite seu bairro..." autocomplete="off" oninput="onCustomerNeighborhoodTyping(this.value)" onchange="onCustomerNeighborhoodTyping(this.value)" required>
+            </div>
+            <div class="form-group grid-item-city">
+              <label for="cust-city"><i class="fa-solid fa-city"></i> 4. Município *</label>
+              <input type="text" id="cust-city" value="Nova Iguaçu" placeholder="Nova Iguaçu" required>
+            </div>
+          </div>
+
+          <!-- 5. Complemento -->
+          <div class="form-group" style="margin-top: 4px;">
+            <label for="cust-complement"><i class="fa-solid fa-building"></i> 5. Complemento / Ponto de Referência</label>
+            <input type="text" id="cust-complement" placeholder="Ex: Apto 201, Bloco B, portão preto">
+          </div>
+
+          <!-- Card de feedback com cálculo dinâmico da taxa de entrega ao digitar o número da residência -->
+          <div class="delivery-fee-badge-card waiting-number" id="delivery-calc-card">
+            <div class="fee-card-left">
+              <div class="fee-card-icon" id="delivery-fee-icon"><i class="fa-solid fa-motorcycle"></i></div>
+              <div>
+                <div class="fee-card-title" id="delivery-distance-title">Taxa de Entrega</div>
+                <div class="fee-card-sub" id="delivery-eta-text">Digite o CEP e o número da residência para calcular</div>
+              </div>
+            </div>
+            <div class="fee-card-right">
+              <span class="fee-label">Valor do Frete</span>
+              <strong class="fee-amount" id="delivery-fee-badge-amount">Informe o Nº</strong>
+            </div>
+          </div>
+          <div id="delivery-warning-badge" class="distance-limit-warning" style="display: none; margin-top: 6px;"></div>
+        </div>
+
+        <!-- Alerta de Retirada -->
+        <div class="pickup-alert-box" id="pickup-info-box" style="display: none;">
+          <i class="fa-solid fa-location-dot"></i>
+          <div>
+            <strong>Ponto de Retirada:</strong>
+            <p>Rua Isabel Pedrosa, 31, Da Luz, Nova Iguaçu - RJ</p>
+          </div>
+        </div>
+
+        <!-- Opção de Agendamento vs Pedido Imediato -->
+        <div class="form-group" id="timing-control-form-group">
+          <label>Previsão do Pedido *</label>
+          <div class="segmented-control" id="timing-segmented-control">
+            <label class="seg-item" id="seg-item-imediato">
+              <input type="radio" name="order-timing-type" id="timing-type-imediato" value="imediato" checked onchange="toggleSchedulingSection(false)">
+              <span><i class="fa-solid fa-bolt"></i> Pedir para Agora</span>
+            </label>
+            <label class="seg-item" id="seg-item-agendado">
+              <input type="radio" name="order-timing-type" id="timing-type-agendado" value="agendado" onchange="toggleSchedulingSection(true)">
+              <span><i class="fa-solid fa-calendar-days"></i> Agendar Pedido</span>
+            </label>
+          </div>
+          <!-- Alerta Automático: Fora do Horário de Atendimento Imediato -->
+          <div id="store-closed-scheduling-alert" class="store-closed-scheduling-banner" style="display: none;">
+            <i class="fa-solid fa-clock"></i>
+            <div>
+              <strong>Fora do horário de atendimento imediato</strong>
+              <p id="store-closed-scheduling-alert-text">Nossa cozinha está fechada no momento para entrega imediata. Direcionamos seu pedido automaticamente para <strong>Agendamento</strong>!</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bloco de Campos de Agendamento -->
+        <div class="scheduling-container-card" id="scheduling-fields-group" style="display: none;">
+          <div class="scheduling-card-head">
+            <div class="sched-icon-box"><i class="fa-solid fa-calendar-check"></i></div>
+            <div>
+              <strong>Agendamento de Pedido</strong>
+              <p>Escolha a data e o horário desejado para receber seus salgados.</p>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group" style="flex: 1.2; margin-bottom: 0;">
+              <label for="sched-date"><i class="fa-regular fa-calendar"></i> Data Desejada *</label>
+              <input type="date" id="sched-date" onchange="onScheduleDateChange()">
+            </div>
+            <div class="form-group" style="flex: 1; margin-bottom: 0;">
+              <label for="sched-time"><i class="fa-regular fa-clock"></i> Horário Desejado *</label>
+              <input type="time" id="sched-time">
+            </div>
+          </div>
+
+          <div id="sched-feedback-msg" class="sched-feedback-banner">
+            <!-- Texto dinâmico com horário de funcionamento do dia ou alerta -->
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="cust-payment">Forma de Pagamento *</label>
+          <select id="cust-payment">
+            <option value="Pix" selected>Pix (QR Code Instantâneo & Copia e Cola)</option>
+            <option value="Cartão de Crédito/Débito">Cartão de Crédito/Débito (Máquina)</option>
+            <option value="Dinheiro">Dinheiro</option>
+          </select>
+        </div>
+
+        <!-- CARD DE PAGAMENTO DINÂMICO VIA PIX (QR CODE & COPIA E COLA) -->
+        <div class="pix-checkout-box" id="pix-checkout-container">
+          <div class="pix-checkout-head">
+            <div class="pix-brand-tag">
+              <i class="fa-brands fa-pix"></i> Pagamento Instantâneo via PIX
+            </div>
+            <span class="pix-live-badge"><i class="fa-solid fa-bolt"></i> Dinâmico</span>
+          </div>
+
+          <div class="pix-amount-row">
+            <span class="pix-amount-label">Total do seu Pedido no Pix:</span>
+            <strong class="pix-amount-val" id="pix-display-total">R$ 0,00</strong>
+          </div>
+
+          <div class="pix-qr-wrapper">
+            <div class="pix-qr-frame">
+              <img id="pix-qr-img" src="" alt="QR Code PIX do Pedido" class="pix-qr-img">
+            </div>
+            <div class="pix-qr-caption">
+              Aponte a câmera no app do seu banco ou utilize o <strong>Copia e Cola</strong> abaixo
+            </div>
+          </div>
+
+          <div class="pix-copy-section">
+            <div class="pix-copy-label-row">
+              <label for="pix-copy-paste-input"><i class="fa-solid fa-barcode"></i> Código Pix Copia e Cola:</label>
+            </div>
+            <div class="pix-input-copy-group">
+              <input type="text" id="pix-copy-paste-input" readonly value="" placeholder="Gerando código Pix..." onclick="this.select()">
+              <button type="button" class="btn-copy-pix" id="btn-copy-pix" onclick="copyPixCodeToClipboard()">
+                <i class="fa-solid fa-copy"></i> <span id="btn-copy-pix-text">Copiar Código</span>
+              </button>
+            </div>
+            <div id="pix-copy-feedback" class="pix-copy-feedback" style="display: none;">
+              <i class="fa-solid fa-circle-check"></i> Código Pix copiado! Cole no app do seu banco.
+            </div>
+          </div>
+
+          <div class="pix-beneficiary-info" id="pix-beneficiary-info">
+            <!-- Dados do Titular e Chave inseridos dinamicamente via JS -->
+          </div>
+
+          <div class="pix-instructions-hint">
+            <i class="fa-solid fa-shield-halved"></i> <span>Após pagar pelo app do seu banco, clique no botão verde abaixo para enviar o pedido no WhatsApp com o comprovante.</span>
+          </div>
+        </div>
+
+        <div class="form-group" id="cash-change-group" style="display: none;">
+          <label for="cust-change">Precisa de troco para quanto?</label>
+          <input type="text" id="cust-change" placeholder="Ex: R$ 100,00 ou Não preciso">
+        </div>
+
+        <div class="form-group">
+          <label for="cust-notes">Observações adicionais (opcional)</label>
+          <textarea id="cust-notes" rows="2" placeholder="Ex: Ponto de referência, campainha, etc..."></textarea>
+        </div>
+      </form>
+    </div>
+
+    <div class="drawer-footer">
+      <div class="drawer-summary-breakdown">
+        <div class="drawer-summary-line">
+          <span>Subtotal dos itens:</span>
+          <span id="drawer-subtotal-amount">R$ 0,00</span>
+        </div>
+        <div class="drawer-summary-line" id="drawer-delivery-summary-line">
+          <span>Taxa de Entrega (<span id="drawer-delivery-km-label">2.0 km</span>):</span>
+          <span id="drawer-delivery-amount" class="fee-text-highlight">R$ 5,00</span>
+        </div>
+        <div class="drawer-summary-line drawer-total-highlight">
+          <span>Total do Pedido:</span>
+          <strong id="drawer-total-amount">R$ 0,00</strong>
+        </div>
+      </div>
+      <button class="btn-whatsapp-finish" id="btn-finish-whatsapp">
+        <i class="fa-brands fa-whatsapp"></i> Enviar Pedido no WhatsApp
+      </button>
+    </div>
+  </aside>
+
+  <!-- Footer -->
+  <footer class="vip-footer">
+    <div class="container">
+      <div id="footer-logo-wrapper" class="footer-logo-wrapper" style="display: none; margin-bottom: 12px;">
+        <img id="footer-logo-img" src="" alt="Logo" class="footer-logo-img">
+      </div>
+      <h3 id="footer-store-name">Salgados VIP - Nova Iguaçu</h3>
+      <p>Salgados sequinhos, fritos na hora com a mais alta qualidade do Rio de Janeiro.</p>
+      <div class="footer-meta">
+        <p><i class="fa-solid fa-location-dot"></i> Rua Isabel Pedrosa, 31, Da Luz, Nova Iguaçu - RJ</p>
+        <p><i class="fa-regular fa-clock"></i> Horário: 16:00 às 22:30 (Todos os dias)</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL DE LOGIN FÁCIL COM WHATSAPP (SEM SENHAS / MEMÓRIA INTELIGENTE) -->
+  <div class="modal-backdrop" id="customer-login-backdrop" onclick="closeCustomerLoginModal()"></div>
+  <div class="customer-login-modal" id="customer-login-modal" style="display: none;">
+    <div class="customer-login-header">
+      <div class="login-header-title">
+        <i class="fa-brands fa-whatsapp"></i> Identificação VIP
+      </div>
+      <button class="btn-close-login-modal" onclick="closeCustomerLoginModal()" title="Fechar modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="customer-login-body">
+      <p class="login-intro-text">
+        Digite seu <strong>WhatsApp</strong>. Nós buscaremos seu endereço cadastrado e seu último pedido para você pedir em segundos, sem precisar de senha!
+      </p>
+      
+      <div class="form-group" style="margin-top: 1.25rem;">
+        <label for="login-cust-phone"><i class="fa-solid fa-phone"></i> Seu WhatsApp com DDD *</label>
+        <div class="login-phone-wrapper">
+          <input type="tel" id="login-cust-phone" placeholder="Ex: (21) 98765-4321" maxlength="15" oninput="maskPhoneInput(this)" onkeydown="if(event.key==='Enter') executeCustomerPhoneLookup()">
+          <button type="button" class="btn-do-login" id="btn-do-login" onclick="executeCustomerPhoneLookup()">
+            <i class="fa-solid fa-arrow-right"></i> Entrar
+          </button>
+        </div>
+      </div>
+
+      <div id="login-feedback-status" class="login-feedback-status" style="display: none;"></div>
+
+      <div class="login-security-notice">
+        <i class="fa-solid fa-shield-halved"></i> <span>Seus dados ficam gravados com segurança no seu dispositivo e na nuvem. Você só precisa fazer login uma única vez.</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="supabase.min.js"></script>
+  <script>
+    if (!window.supabase) {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
+    }
+  </script>
+  <script src="shared-data.js"></script>
+  <script src="app.js"></script>
+  <script src="pwa.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+{
+  "id": "./admin.html?source=pwa-admin",
+  "name": "Salgados VIP - Painel da Cozinha",
+  "short_name": "VIP Cozinha",
+  "description": "Painel de gestão de pedidos ao vivo, controle de cozinha, Kanban e delivery",
+  "start_url": "./admin.html",
+  "scope": "./admin.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f172a",
+  "theme_color": "#1e293b",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pedidos ao Vivo (Kanban)",
+      "short_name": "Pedidos",
+      "description": "Acompanhar pedidos em tempo real",
+      "url": "./admin.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Cardápio Loja",
+      "short_name": "Cardápio",
+      "description": "Visualizar cardápio do cliente",
+      "url": "./index.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

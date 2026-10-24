@@ -1,0 +1,63 @@
+{
+  "id": "./index.html?source=pwa-cliente",
+  "name": "Salgados VIP - Cardápio Delivery",
+  "short_name": "Salgados VIP",
+  "description": "Cardápio digital e delivery de salgados fritos artesanais, kits e bebidas em Nova Iguaçu - RJ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#dc2626",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": [
+    "food",
+    "shopping"
+  ],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Cardápio Delivery",
+      "short_name": "Cardápio",
+      "description": "Fazer pedido de salgados e kits",
+      "url": "./index.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Kits Promocionais",
+      "short_name": "Kits",
+      "description": "Ver kits de salgados para festas",
+      "url": "./index.html#kits-salgados",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+# Arquivos de sistema e ambiente
+__pycache__/
+*.py[cod]
+*$py.class
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Backups temporários locais
+*.bak
+*.zip
+
