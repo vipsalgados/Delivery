@@ -1565,22 +1565,30 @@
                         <i class="fa-solid fa-cloud" style="color: #0284c7;"></i> Provedor de Gateway WhatsApp:
                       </label>
                       <div class="wa-provider-pills" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button type="button" class="wa-provider-pill active" id="btn-provider-evolution" onclick="selectWhatsAppProvider('evolution')">
-                          <i class="fa-solid fa-server"></i> Evolution API (Recomendado)
+                        <button type="button" class="wa-provider-pill active" id="btn-provider-native" onclick="selectWhatsAppProvider('native')">
+                          <i class="fa-solid fa-laptop-code"></i> WhatsApp Silencioso Local (Nativo - Zero Janelas)
+                        </button>
+                        <button type="button" class="wa-provider-pill" id="btn-provider-evolution" onclick="selectWhatsAppProvider('evolution')">
+                          <i class="fa-solid fa-server"></i> Evolution API (Nuvem)
                         </button>
                         <button type="button" class="wa-provider-pill" id="btn-provider-zapi" onclick="selectWhatsAppProvider('zapi')">
                           <i class="fa-solid fa-bolt"></i> Z-API
                         </button>
-                        <button type="button" class="wa-provider-pill" id="btn-provider-custom" onclick="selectWhatsAppProvider('custom')">
-                          <i class="fa-solid fa-sliders"></i> Personalizado
-                        </button>
                         <button type="button" class="wa-provider-pill" id="btn-provider-simulator" onclick="selectWhatsAppProvider('simulator')">
-                          <i class="fa-solid fa-vial"></i> Modo Demonstração
+                          <i class="fa-solid fa-vial"></i> Demonstração
                         </button>
                       </div>
                     </div>
 
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: flex-end;">
+                    <!-- Mensagem do Provedor Nativo Local -->
+                    <div id="cfg-wa-native-box" style="display: block; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #065f46; margin-bottom: 4px;">
+                      <div style="font-weight: 800; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                        <i class="fa-solid fa-shield-halved" style="color: #059669;"></i> Motor WhatsApp Silencioso Blindado (Porta 18182)
+                      </div>
+                      <span>Automação em segundo plano com autenticação criptográfica segura. Acesse o WhatsApp Web anonimamente sem abrir abas ou janelas durante o expediente da loja.</span>
+                    </div>
+
+                    <div id="cfg-wa-cloud-grid" style="display: none; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: flex-end;">
                       <div>
                         <label for="cfg-wa-cloud-url" style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">
                           URL da API na Nuvem *

@@ -5,8 +5,10 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# Logs
+# Logs e credenciais locais
 *.log
+*.key
+whatsapp_service_token.json
 
 # Backups temporários locais
 *.bak
