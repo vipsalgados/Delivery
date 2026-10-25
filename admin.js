@@ -3363,6 +3363,11 @@ window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
 
+  // Se já foi impresso e for disparo automático de novo pedido, não imprime duplicado
+  if (isAutoPrint && (order.printed || order.printedAt)) {
+    return;
+  }
+
   const cfg = VIPDatabase.getConfig();
   const printerCfg = VIPDatabase.getPrinterConfig();
   const numCopies = printerCfg.copies || 1;
@@ -3371,11 +3376,18 @@ window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
   try {
     const textReceipt = buildOrderTextReceipt(order, cfg, printerCfg);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+    const token = (window.VIPWhatsAppGateway && typeof window.VIPWhatsAppGateway.getLocalAuthToken === "function")
+      ? await window.VIPWhatsAppGateway.getLocalAuthToken()
+      : (localStorage.getItem("salgados_vip_wa_local_token") || "");
+
+    const headers = { "Content-Type": "application/json" };
+    if (token) headers["X-VIP-Token"] = token;
 
     const response = await fetch("http://127.0.0.1:18181/print", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({
         orderId: order.id,
         receiptText: textReceipt,
@@ -3397,10 +3409,19 @@ window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
       }
     }
   } catch (agentErr) {
-    // Se o serviço local de spooler não estiver ativo, segue para o motor Kiosk HTML
+    // Se o serviço local de spooler não estiver ativo neste computador
   }
 
-  // 2. SE O AGENTE LOCAL NÃO ESTIVER ATIVO, USA O MOTOR DE TELA HTML (COM SUPORTE A KIOSK PRINTING)
+  // REGRA CRÍTICA ANTI-INTERRUPÇÃO:
+  // Se for disparo automático (autoPrint) e este computador não estiver com o spooler local conectado,
+  // NUNCA abre janela nativa de confirmação do navegador (window.print()) para não travar a tela do operador!
+  // A impressão já é captada e processada automaticamente pelo computador central com a impressora.
+  if (isAutoPrint) {
+    console.log(`[AutoPrint] Terminal sem spooler local direto; impressão do pedido #${order.id} delegada ao agente de impressão da loja.`);
+    return;
+  }
+
+  // 2. SE O OPERADOR CLICOU MANUALMENTE ("Imprimir Comprovante"), USA O MOTOR KIOSK HTML / DIÁLOGO NATIVO
   const paperClass = printerCfg.paperWidth === "58mm" ? "paper-58mm" : "paper-80mm";
   const orderDateStr = new Date(order.createdAt).toLocaleString("pt-BR", {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
@@ -6706,14 +6727,27 @@ echo =====================================================================
 echo    SALGADOS VIP - SERVICO DE IMPRESSAO SILENCIOSA (WINDOWS)
 echo =====================================================================
 echo.
-echo [*] Iniciando servidor local na porta 18181...
-echo [*] Este servico permite imprimir direto no Spooler do Windows
-echo [*] SEM abrir nenhuma janela do navegador ou pedir confirmacao.
-echo.
-echo Mantenha esta janela minimizada durante o expediente.
+echo [*] Iniciando agente de impressao em segundo plano...
+echo [*] Este servico imprime direto no Spooler do Windows (porta 18181)
+echo [*] e monitora pedidos da nuvem mesmo com o navegador fechado!
 echo.
 
+where py >nul 2>nul
+if %errorlevel% equ 0 (
+    py "%~dp0Agente_Impressao_Silenciosa.py"
+    goto :FIM
+)
+
+where python >nul 2>nul
+if %errorlevel% equ 0 (
+    python "%~dp0Agente_Impressao_Silenciosa.py"
+    goto :FIM
+)
+
+echo [*] Python nao encontrado no PATH. Usando motor PowerShell...
 powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0Servico_Impressao_Silenciosa.ps1"
+
+:FIM
 if %errorlevel% neq 0 (
     echo.
     echo [!] O servico foi encerrado ou encontrou um erro.
@@ -6779,9 +6813,16 @@ window.checkPrintAgentStatus = async function() {
   if (!badge) return false;
 
   try {
+    const token = (window.VIPWhatsAppGateway && typeof window.VIPWhatsAppGateway.getLocalAuthToken === "function")
+      ? await window.VIPWhatsAppGateway.getLocalAuthToken()
+      : (localStorage.getItem("salgados_vip_wa_local_token") || "");
+
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 900);
-    const res = await fetch("http://127.0.0.1:18181/status", { signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
+    const headers = {};
+    if (token) headers["X-VIP-Token"] = token;
+
+    const res = await fetch("http://127.0.0.1:18181/status", { headers, signal: controller.signal });
     clearTimeout(timeoutId);
     if (res.ok) {
       const data = await res.json();
@@ -8258,7 +8299,7 @@ window.saveCurrentCashClosing = function() {
   renderCashClosingView();
 };
 
-window.printCashClosingThermal = function() {
+window.printCashClosingThermal = async function() {
   if (!currentCaixaCalculatedData) return;
   const data = currentCaixaCalculatedData;
   const cfg = VIPDatabase.getConfig();
@@ -8488,9 +8529,15 @@ ${closingPayload.notes ? `OBS: ${closingPayload.notes}\n` : ""}
 Assinatura: ___________________________
 `;
 
+    const token = (window.VIPWhatsAppGateway && typeof window.VIPWhatsAppGateway.getLocalAuthToken === "function")
+      ? await window.VIPWhatsAppGateway.getLocalAuthToken()
+      : (localStorage.getItem("salgados_vip_wa_local_token") || "");
+    const printHeaders = { "Content-Type": "application/json" };
+    if (token) printHeaders["X-VIP-Token"] = token;
+
     fetch("http://127.0.0.1:18181/print", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: printHeaders,
       body: JSON.stringify({
         text: textReport,
         printerName: printerCfg.printerName || "",
