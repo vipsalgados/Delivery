@@ -5,7 +5,10 @@
  * ==============================================================================
  */
 
+window.VIP_APP_VERSION = "v39.0 (Bkp 39)";
+
 const STORAGE_KEYS = {
+
   CONFIG: "salgados_vip_config",
   KITS: "salgados_vip_kits",
   FLAVORS: "salgados_vip_flavors",

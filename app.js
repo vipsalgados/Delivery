@@ -1526,9 +1526,14 @@ document.getElementById("btn-close-customizer").addEventListener("click", closeK
 document.getElementById("customizer-backdrop").addEventListener("click", closeKitCustomizer);
 
 function closeCheckoutDrawer() {
-  document.getElementById("checkout-drawer").classList.remove("active");
-  document.getElementById("checkout-backdrop").classList.remove("active");
+  const drawer = document.getElementById("checkout-drawer");
+  const backdrop = document.getElementById("checkout-backdrop");
+  if (drawer) drawer.classList.remove("active");
+  if (backdrop) backdrop.classList.remove("active");
 }
+window.closeCheckoutDrawer = closeCheckoutDrawer;
+window.closeCartDrawer = closeCheckoutDrawer;
+
 
 // ==============================================================================
 // 10.4 BUSCA AUTOMÁTICA DE ENDEREÇO POR CEP (VIACEP API)
@@ -2356,7 +2361,8 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
   showToastNotification(`Pedido #${savedOrder.id} enviado com sucesso!`);
   cartItems = [];
   updateCartGlobalUI();
-  closeCartDrawer();
+  closeCheckoutDrawer();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
 // Toast Feedback Helper
