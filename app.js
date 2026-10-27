@@ -2355,14 +2355,37 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
 
   msg += `\n_Pedido gerado via cardápio digital. Aguardo confirmação!_`;
 
-  const waUrl = `https://wa.me/${cfg.whatsappNumber}?text=${encodeURIComponent(msg)}`;
-  window.open(waUrl, "_blank");
+  // 1. Fecha imediatamente a gaveta lateral do pedido e remove o fundo escuro
+  closeCheckoutDrawer();
 
-  showToastNotification(`Pedido #${savedOrder.id} enviado com sucesso!`);
+  // 2. Retorna a página inicial ao topo suavemente
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // 3. Esvazia o carrinho e atualiza a barra flutuante
   cartItems = [];
   updateCartGlobalUI();
-  closeCheckoutDrawer();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // 4. Limpa observações e troco do formulário
+  const custNotesInput = document.getElementById("cust-notes");
+  if (custNotesInput) custNotesInput.value = "";
+  const custChangeInput = document.getElementById("cust-change");
+  if (custChangeInput) custChangeInput.value = "";
+
+  // 5. Exibe confirmação visual de sucesso
+  showToastNotification(`Pedido #${savedOrder.id} finalizado com sucesso!`);
+
+  // 6. Abre o WhatsApp com a mensagem do pedido (sem travar a tela da loja)
+  const waUrl = `https://wa.me/${cfg.whatsappNumber}?text=${encodeURIComponent(msg)}`;
+  setTimeout(() => {
+    try {
+      const waWindow = window.open(waUrl, "_blank");
+      if (!waWindow || waWindow.closed || typeof waWindow.closed === "undefined") {
+        window.location.href = waUrl;
+      }
+    } catch (e) {
+      window.location.href = waUrl;
+    }
+  }, 100);
 });
 
 // Toast Feedback Helper
