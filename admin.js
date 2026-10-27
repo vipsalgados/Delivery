@@ -1467,19 +1467,14 @@ let activeWhatsAppNotifyOrderId = null;
 let activeWhatsAppTemplateKey = "confirmado";
 
 // ==============================================================================
-// CENTRAL DE GATEWAY DE WHATSAPP EM NUVEM (EVOLUTION API / Z-API / BAILEYS CLOUD)
-// 100% Funcional e Silencioso em qualquer computador, tablet, celular ou Netlify
-// Não depende de nenhum computador Windows ligado localmente!
-// As credenciais e a sessão são sincronizadas globalmente via Supabase store_settings.
+// ==============================================================================
+// CENTRAL WHATSAPP WEB - CONEXÃO SILENCIOSA VIA QR CODE
+// Integração direta com o serviço local blindado (18182) e bridge Supabase.
 // ==============================================================================
 const VIPWhatsAppGateway = {
   ENDPOINT_LOCAL: "http://127.0.0.1:18182",
   localAuthToken: "",
   config: {
-    provider: "native", // "native", "evolution", "zapi", "custom", "simulator"
-    serverUrl: "",
-    instanceName: "salgadosvip",
-    apiKey: "",
     connected: false,
     phone: "",
     status: "disconnected", // "disconnected", "qr_ready", "connected"
@@ -1488,6 +1483,7 @@ const VIPWhatsAppGateway = {
   isChecking: false,
   pollTimer: null,
   qrCountdownTimer: null,
+  lastStatus: null,
 
   async getLocalAuthToken() {
     if (this.localAuthToken) return this.localAuthToken;
@@ -1528,24 +1524,20 @@ const VIPWhatsAppGateway = {
     return "";
   },
 
-  // Inicializa e carrega credenciais da nuvem Supabase e do localStorage
   async init() {
     this.loadLocalConfig();
     await this.syncFromSupabase();
     await this.getLocalAuthToken();
-    this.updateUIConfigFields();
   },
 
   loadLocalConfig() {
     try {
-      const saved = localStorage.getItem("salgados_vip_wa_cloud_config");
+      const saved = localStorage.getItem("salgados_vip_wa_status_config");
       if (saved) {
         const parsed = JSON.parse(saved);
         this.config = { ...this.config, ...parsed };
       }
-    } catch (e) {
-      console.warn("[WhatsApp Gateway] Falha ao carregar do localStorage:", e);
-    }
+    } catch (e) {}
   },
 
   async syncFromSupabase() {
@@ -1555,99 +1547,25 @@ const VIPWhatsAppGateway = {
 
       const { data: row } = await sb.from("store_settings")
         .select("value, updated_at")
-        .eq("id", "whatsapp_cloud_gateway")
+        .eq("id", "whatsapp_robot_status")
         .maybeSingle();
 
       if (row && row.value) {
-        this.config = { ...this.config, ...row.value };
-        localStorage.setItem("salgados_vip_wa_cloud_config", JSON.stringify(this.config));
+        const val = row.value;
+        const isFresh = val.lastHeartbeat && (Date.now() - val.lastHeartbeat < 45000);
+        if (isFresh) {
+          this.config.connected = Boolean(val.connected);
+          this.config.status = val.status || (val.connected ? "connected" : "disconnected");
+        }
       }
-    } catch (err) {
-      console.warn("[WhatsApp Gateway] Falha ao sincronizar do Supabase:", err);
-    }
+    } catch (err) {}
   },
 
-  async saveConfig(newConfig, syncSupabase = true) {
+  async saveConfig(newConfig) {
     this.config = { ...this.config, ...newConfig };
     try {
-      localStorage.setItem("salgados_vip_wa_cloud_config", JSON.stringify(this.config));
+      localStorage.setItem("salgados_vip_wa_status_config", JSON.stringify(this.config));
     } catch (e) {}
-
-    if (syncSupabase) {
-      try {
-        const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
-        if (sb) {
-          await sb.from("store_settings").upsert({
-            id: "whatsapp_cloud_gateway",
-            value: this.config,
-            updated_at: new Date().toISOString()
-          });
-        }
-      } catch (err) {
-        console.warn("[WhatsApp Gateway] Erro ao salvar no Supabase:", err);
-      }
-    }
-  },
-
-  updateUIConfigFields() {
-    const provNative = document.getElementById("btn-provider-native");
-    const provEvolution = document.getElementById("btn-provider-evolution");
-    const provZapi = document.getElementById("btn-provider-zapi");
-    const provSimulator = document.getElementById("btn-provider-simulator");
-
-    const pills = [
-      { id: "native", el: provNative },
-      { id: "evolution", el: provEvolution },
-      { id: "zapi", el: provZapi },
-      { id: "simulator", el: provSimulator }
-    ];
-
-    pills.forEach(p => {
-      if (p.el) {
-        if (p.id === this.config.provider) {
-          p.el.classList.add("active");
-        } else {
-          p.el.classList.remove("active");
-        }
-      }
-    });
-
-    const nativeBox = document.getElementById("cfg-wa-native-box");
-    const cloudGrid = document.getElementById("cfg-wa-cloud-grid");
-    if (nativeBox && cloudGrid) {
-      if (this.config.provider === "native") {
-        nativeBox.style.display = "block";
-        cloudGrid.style.display = "none";
-      } else if (this.config.provider === "simulator") {
-        nativeBox.style.display = "none";
-        cloudGrid.style.display = "none";
-      } else {
-        nativeBox.style.display = "none";
-        cloudGrid.style.display = "grid";
-      }
-    }
-
-    const urlInput = document.getElementById("cfg-wa-cloud-url");
-    const instInput = document.getElementById("cfg-wa-cloud-instance");
-    const tokenInput = document.getElementById("cfg-wa-cloud-token");
-    const instCol = document.getElementById("cfg-wa-instance-col");
-
-    if (urlInput && this.config.serverUrl) urlInput.value = this.config.serverUrl;
-    if (instInput && this.config.instanceName) instInput.value = this.config.instanceName;
-    if (tokenInput && this.config.apiKey) tokenInput.value = this.config.apiKey;
-
-    if (instCol) {
-      instCol.style.display = this.config.provider === "zapi" ? "none" : "block";
-    }
-  },
-
-  cleanBaseUrl(url) {
-    if (!url) return "";
-    let u = url.trim();
-    if (!u.startsWith("http://") && !u.startsWith("https://")) {
-      u = "https://" + u;
-    }
-    return u.replace(/\/+$/, "");
   },
 
   cleanPhone(phone) {
@@ -1659,195 +1577,86 @@ const VIPWhatsAppGateway = {
     return digits;
   },
 
-  // Consulta status atual da conexão em nuvem ou local
+  // Consulta status atual do robô de WhatsApp
   async checkStatus() {
     if (this.isChecking) return this.lastStatus;
     this.isChecking = true;
     try {
-      const provider = this.config.provider || "native";
-      const serverUrl = this.cleanBaseUrl(this.config.serverUrl);
-      const instance = (this.config.instanceName || "salgadosvip").trim();
-      const apiKey = (this.config.apiKey || "").trim();
+      let token = await this.getLocalAuthToken();
+      // 1. Tenta serviço local na porta 18182
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+        const headers = { "Content-Type": "application/json" };
+        if (token) headers["X-VIP-Token"] = token;
 
-      // 1. MOTOR NATIVO LOCAL (WHATSAPP WEB SILENCIOSO BLINDADO)
-      if (provider === "native") {
-        let token = await this.getLocalAuthToken();
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 2500);
-          const headers = { "Content-Type": "application/json" };
-          if (token) headers["X-VIP-Token"] = token;
+        const res = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
+          headers,
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
 
-          const res = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
-            headers,
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          if (res.status === 401) {
-            // Tenta recarregar token
-            this.localAuthToken = "";
-            token = await this.getLocalAuthToken();
-            if (token) {
-              const res2 = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
-                headers: { "Content-Type": "application/json", "X-VIP-Token": token }
-              });
-              if (res2.ok) {
-                const data2 = await res2.json();
-                this.config.connected = Boolean(data2.connected);
-                this.lastStatus = { ...data2, mode: "local", provider: "native" };
-                return this.lastStatus;
-              }
+        if (res.status === 401) {
+          this.localAuthToken = "";
+          token = await this.getLocalAuthToken();
+          if (token) {
+            const res2 = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
+              headers: { "Content-Type": "application/json", "X-VIP-Token": token }
+            });
+            if (res2.ok) {
+              const data2 = await res2.json();
+              this.config.connected = Boolean(data2.connected);
+              this.lastStatus = { ...data2, mode: "local" };
+              return this.lastStatus;
             }
-            this.lastStatus = {
-              online: true,
-              connected: false,
-              status: "auth_required",
-              statusText: "Token de segurança pendente",
-              mode: "local",
-              provider: "native"
-            };
-            return this.lastStatus;
           }
+        }
 
-          if (res.ok) {
-            const data = await res.json();
-            this.config.connected = Boolean(data.connected);
-            this.lastStatus = { ...data, mode: "local", provider: "native" };
-            return this.lastStatus;
-          }
-        } catch (errLocal) {
-          this.lastStatus = {
-            online: false,
-            connected: false,
-            status: "offline",
-            statusText: "Serviço local desligado",
-            mode: "local",
-            provider: "native"
-          };
+        if (res.ok) {
+          const data = await res.json();
+          this.config.connected = Boolean(data.connected);
+          this.lastStatus = { ...data, mode: "local" };
           return this.lastStatus;
         }
+      } catch (errLocal) {
+        // Localhost não respondeu (ex: acessando pelo celular ou computador sem o robô)
       }
 
-      // 2. MODO SIMULADO / DEMONSTRAÇÃO
-      if (provider === "simulator") {
-        if (this.config.connected) {
-          this.lastStatus = {
-            online: true,
-            connected: true,
-            mode: "cloud",
-            provider: "simulator",
-            phone: this.config.phone || "+55 (21) 98675-8102 (Demonstração)",
-            instance: "modo-simulado"
-          };
-          return this.lastStatus;
-        }
-        this.lastStatus = {
-          online: true,
-          connected: false,
-          status: this.config.status || "disconnected",
-          mode: "cloud",
-          provider: "simulator"
-        };
-        return this.lastStatus;
-      }
+      // 2. Se local não respondeu, consulta status sincronizado na Nuvem Supabase
+      try {
+        const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
+        if (sb) {
+          const { data: row } = await sb.from("store_settings")
+            .select("value, updated_at")
+            .eq("id", "whatsapp_robot_status")
+            .maybeSingle();
 
-      // 3. EVOLUTION API (v1 / v2)
-      if (provider === "evolution" && serverUrl && apiKey) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const res = await fetch(`${serverUrl}/instance/connectionState/${instance}`, {
-            headers: { "apikey": apiKey },
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            const state = data?.instance?.state || data?.state;
-            const isOpen = state === "open";
-
-            if (isOpen) {
-              this.config.connected = true;
-              this.config.status = "connected";
+          if (row && row.value) {
+            const val = row.value;
+            const isFresh = val.lastHeartbeat && (Date.now() - val.lastHeartbeat < 45000);
+            if (isFresh && val.online) {
+              this.config.connected = Boolean(val.connected);
               this.lastStatus = {
                 online: true,
-                connected: true,
-                mode: "cloud",
-                provider: "evolution",
-                phone: this.config.phone || "Instância Conectada",
-                instance: instance
-              };
-              return this.lastStatus;
-            } else if (state === "connecting") {
-              this.lastStatus = {
-                online: true,
-                connected: false,
-                status: "qr_ready",
-                mode: "cloud",
-                provider: "evolution"
+                connected: Boolean(val.connected),
+                status: val.status || (val.connected ? "connected" : "disconnected"),
+                statusText: val.statusText || (val.connected ? "Conectado e pronto" : "Aguardando QR Code"),
+                hasQr: Boolean(val.hasQr),
+                qrCode: val.qrCode || null,
+                mode: "cloud_sync"
               };
               return this.lastStatus;
             }
           }
-        } catch (errEv) {
-          // Timeout ou erro de rede no gateway
         }
-      }
+      } catch (errSb) {}
 
-      // 4. Z-API
-      if (provider === "zapi" && serverUrl) {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 4000);
-          const headers = {};
-          if (apiKey) headers["Client-Token"] = apiKey;
-
-          const res = await fetch(`${serverUrl}/status`, {
-            headers,
-            signal: controller.signal
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data && data.connected) {
-              this.config.connected = true;
-              this.config.status = "connected";
-              if (data.phone) this.config.phone = data.phone;
-              this.lastStatus = {
-                online: true,
-                connected: true,
-                mode: "cloud",
-                provider: "zapi",
-                phone: data.phone || this.config.phone || "Z-API Conectada",
-                instance: instance
-              };
-              return this.lastStatus;
-            }
-          }
-        } catch (errZ) {}
-      }
-
-      // 5. Se a nuvem marcou anteriormente como conectada (verificação rápida para manter estado)
-      if (this.config.connected && !serverUrl && provider !== "native") {
-        this.lastStatus = {
-          online: true,
-          connected: true,
-          mode: "cloud",
-          provider: this.config.provider,
-          phone: this.config.phone || "Conectado",
-          instance: this.config.instanceName
-        };
-        return this.lastStatus;
-      }
-
-      // 6. Totalmente desconectado
+      // 3. Totalmente offline
       this.lastStatus = {
         online: false,
         connected: false,
-        status: "disconnected",
+        status: "offline",
+        statusText: "Serviço WhatsApp desligado",
         mode: "offline"
       };
       return this.lastStatus;
@@ -1856,189 +1665,47 @@ const VIPWhatsAppGateway = {
     }
   },
 
-  // Inicia conexão e gera QR Code
+  // Conecta e exibe o QR Code na tela
   async connectAndShowQR() {
-    const provider = this.config.provider || "native";
-    const serverUrl = this.cleanBaseUrl(this.config.serverUrl);
-    const instance = (this.config.instanceName || "salgadosvip").trim();
-    const apiKey = (this.config.apiKey || "").trim();
-
     const paneOffline = document.getElementById("wa-silent-status-offline");
     const paneQr = document.getElementById("wa-silent-status-qr");
     const paneConnected = document.getElementById("wa-silent-status-connected");
     const qrImg = document.getElementById("wa-silent-qr-img");
     const badgeEl = document.getElementById("wa-silent-global-badge");
-    const instLabel = document.getElementById("wa-qr-instance-label");
-
-    if (instLabel) instLabel.innerText = instance || provider;
-
-    // 1. MOTOR NATIVO LOCAL
-    if (provider === "native") {
-      let token = await this.getLocalAuthToken();
-      let statusData = null;
-
-      try {
-        const res = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
-          headers: { "X-VIP-Token": token }
-        });
-        if (res.ok) {
-          statusData = await res.json();
-        } else if (res.status === 401) {
-          this.localAuthToken = "";
-          token = await this.getLocalAuthToken();
-          const res2 = await fetch(`${this.ENDPOINT_LOCAL}/status`, {
-            headers: { "X-VIP-Token": token }
-          });
-          if (res2.ok) statusData = await res2.json();
-        }
-      } catch (e) {
-        alert("O serviço WhatsApp Silencioso não está respondendo na porta 18182 deste computador.\n\nInicie o serviço clicando duas vezes no atalho 'Salgados VIP - WhatsApp Silencioso' na Área de Trabalho e tente novamente.");
-        return;
-      }
-
-      if (!statusData) {
-        alert("Não foi possível autenticar com o serviço local. Verifique se o token de segurança está válido.");
-        return;
-      }
-
-      if (statusData.connected) {
-        await this.saveConfig({ connected: true, status: "connected" });
-        await window.checkWhatsAppSilentServiceStatus(true);
-        if (typeof showToastNotification === "function") {
-          showToastNotification("✓ WhatsApp já está conectado e pronto para envios!");
-        }
-        return;
-      }
-
-      let qrSrc = statusData.qrCode;
-      if (!qrSrc && statusData.hasQr) {
-        try {
-          const qrRes = await fetch(`${this.ENDPOINT_LOCAL}/qr`, {
-            headers: { "X-VIP-Token": token }
-          });
-          if (qrRes.ok) {
-            const qrJson = await qrRes.json();
-            qrSrc = qrJson.qrCode;
-          }
-        } catch (e) {}
-      }
-
-      if (qrSrc) {
-        if (qrImg) qrImg.src = qrSrc;
-        if (paneOffline) paneOffline.style.display = "none";
-        if (paneConnected) paneConnected.style.display = "none";
-        if (paneQr) paneQr.style.display = "block";
-        if (badgeEl) {
-          badgeEl.className = "wa-status-pill qr";
-          badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Code Pronto`;
-        }
-        this.startCountdown(90);
-        this.startPollingConnection();
-      } else {
-        alert("O WhatsApp Web está inicializando em segundo plano. Aguarde cerca de 10 segundos e clique em 'Gerar QR Code & Conectar' novamente.");
-      }
-      return;
-    }
-
-    if (provider === "simulator") {
-      // Gera QR Code simulado
-      if (paneOffline) paneOffline.style.display = "none";
-      if (paneConnected) paneConnected.style.display = "none";
-      if (paneQr) paneQr.style.display = "block";
-      if (badgeEl) {
-        badgeEl.className = "wa-status-pill qr";
-        badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Pronto (Simulado)`;
-      }
-
-      const dummyCode = "SALGADOS_VIP_DEMO_" + Date.now();
-      if (qrImg) {
-        qrImg.src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(dummyCode)}`;
-      }
-
-      this.startCountdown(45);
-
-      // Simula conexão automática após 6 segundos
-      setTimeout(async () => {
-        await this.saveConfig({
-          connected: true,
-          status: "connected",
-          phone: "+55 (21) 98675-8102"
-        });
-        this.stopPollingAndTimers();
-        await window.checkWhatsAppSilentServiceStatus(true);
-        if (typeof showToastNotification === "function") {
-          showToastNotification("✓ WhatsApp Conectado com Sucesso na Nuvem (Modo Simulado)!");
-        }
-      }, 6000);
-      return;
-    }
-
-    if (!serverUrl) {
-      alert("Por favor, preencha a URL da API na nuvem antes de gerar o QR Code (veja o botão 'Como Funciona' para instruções).");
-      const urlInput = document.getElementById("cfg-wa-cloud-url");
-      if (urlInput) urlInput.focus();
-      return;
-    }
-
-    if (provider === "evolution" && !apiKey) {
-      alert("Por favor, informe a API Key da sua Evolution API.");
-      const tokenInput = document.getElementById("cfg-wa-cloud-token");
-      if (tokenInput) tokenInput.focus();
-      return;
-    }
 
     if (typeof showToastNotification === "function") {
-      showToastNotification("Solicitando QR Code ao servidor em nuvem...");
+      showToastNotification("Verificando conexão com o WhatsApp Web...");
     }
 
-    try {
-      let qrSrc = "";
+    const statusData = await this.checkStatus();
 
-      if (provider === "evolution") {
-        try {
-          await fetch(`${serverUrl}/instance/create`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "apikey": apiKey },
-            body: JSON.stringify({ instanceName: instance, qrcode: true, integration: "WHATSAPP-BAILEYS" })
-          });
-        } catch (e) {}
+    if (statusData && statusData.connected) {
+      await this.saveConfig({ connected: true, status: "connected" });
+      await window.checkWhatsAppSilentServiceStatus(true);
+      if (typeof showToastNotification === "function") {
+        showToastNotification("✓ WhatsApp já está conectado e pronto para envios!");
+      }
+      return;
+    }
 
-        const connRes = await fetch(`${serverUrl}/instance/connect/${instance}`, {
-          headers: { "apikey": apiKey }
+    let qrSrc = statusData ? statusData.qrCode : null;
+
+    // Se local, tenta buscar /qr direto
+    if (!qrSrc && statusData && statusData.mode === "local") {
+      try {
+        const token = await this.getLocalAuthToken();
+        const qrRes = await fetch(`${this.ENDPOINT_LOCAL}/qr`, {
+          headers: { "X-VIP-Token": token }
         });
-
-        if (!connRes.ok) {
-          throw new Error(`Servidor Evolution retornou status ${connRes.status}`);
+        if (qrRes.ok) {
+          const qrJson = await qrRes.json();
+          qrSrc = qrJson.qrCode;
         }
+      } catch (e) {}
+    }
 
-        const connData = await connRes.json();
-        const b64 = connData.base64 || connData.qrcode?.base64 || "";
-        const code = connData.code || connData.qrcode?.code || "";
-
-        if (b64) {
-          qrSrc = b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`;
-        } else if (code) {
-          qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(code)}`;
-        } else if (connData.state === "open" || connData.instance?.state === "open") {
-          await this.saveConfig({ connected: true, status: "connected" });
-          await window.checkWhatsAppSilentServiceStatus(true);
-          return;
-        } else {
-          throw new Error("Não foi possível gerar a imagem do QR Code. Verifique se a instância já está aberta no servidor.");
-        }
-      } else if (provider === "zapi") {
-        const headers = {};
-        if (apiKey) headers["Client-Token"] = apiKey;
-        const zRes = await fetch(`${serverUrl}/qr-code/image`, { headers });
-        if (!zRes.ok) throw new Error(`Z-API retornou status ${zRes.status}`);
-        const zData = await zRes.json();
-        qrSrc = zData.value || zData.image || "";
-      }
-
-      if (qrImg && qrSrc) {
-        qrImg.src = qrSrc;
-      }
-
+    if (qrSrc) {
+      if (qrImg) qrImg.src = qrSrc;
       if (paneOffline) paneOffline.style.display = "none";
       if (paneConnected) paneConnected.style.display = "none";
       if (paneQr) paneQr.style.display = "block";
@@ -2046,11 +1713,14 @@ const VIPWhatsAppGateway = {
         badgeEl.className = "wa-status-pill qr";
         badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Code Pronto`;
       }
-
       this.startCountdown(60);
       this.startPollingConnection();
-    } catch (err) {
-      alert("Falha ao conectar com o servidor WhatsApp em nuvem:\n" + err.message);
+    } else {
+      if (!statusData || !statusData.online) {
+        alert("O serviço WhatsApp Silencioso não está em execução.\n\nPor favor, execute o atalho 'Salgados VIP - WhatsApp Silencioso' na Área de Trabalho e clique novamente.");
+      } else {
+        alert("O WhatsApp Web está abrindo e sincronizando o QR Code em segundo plano.\nAguarde cerca de 5 segundos e clique novamente.");
+      }
     }
   },
 
@@ -2085,7 +1755,7 @@ const VIPWhatsAppGateway = {
 
     this.pollTimer = setInterval(async () => {
       attempts++;
-      if (attempts > 40) {
+      if (attempts > 50) {
         this.stopPollingAndTimers();
         return;
       }
@@ -2094,14 +1764,16 @@ const VIPWhatsAppGateway = {
         const status = await this.checkStatus();
         if (status && status.connected) {
           this.stopPollingAndTimers();
-          await this.saveConfig({
-            connected: true,
-            status: "connected",
-            phone: status.phone || this.config.phone || "+55 (21) 98675-8102"
-          });
+          await this.saveConfig({ connected: true, status: "connected" });
           await window.checkWhatsAppSilentServiceStatus(true);
           if (typeof showToastNotification === "function") {
             showToastNotification("✓ WhatsApp Conectado com Sucesso!");
+          }
+        } else if (status && status.qrCode) {
+          // Atualiza imagem do QR se o WhatsApp Web gerou um novo código
+          const qrImg = document.getElementById("wa-silent-qr-img");
+          if (qrImg && qrImg.src !== status.qrCode) {
+            qrImg.src = status.qrCode;
           }
         }
       } catch (e) {}
@@ -2119,36 +1791,30 @@ const VIPWhatsAppGateway = {
     }
   },
 
+  cancelConnect() {
+    this.stopPollingAndTimers();
+    const paneOffline = document.getElementById("wa-silent-status-offline");
+    const paneQr = document.getElementById("wa-silent-status-qr");
+    if (paneQr) paneQr.style.display = "none";
+    if (paneOffline) paneOffline.style.display = "block";
+    const badgeEl = document.getElementById("wa-silent-global-badge");
+    if (badgeEl) {
+      badgeEl.className = "wa-status-pill offline";
+      badgeEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Desconectado`;
+    }
+  },
+
   async disconnect() {
     if (!confirm("Deseja realmente desconectar a sessão do WhatsApp?")) return;
     this.stopPollingAndTimers();
 
-    const provider = this.config.provider;
-    const serverUrl = this.cleanBaseUrl(this.config.serverUrl);
-    const instance = this.config.instanceName;
-    const apiKey = this.config.apiKey;
-
-    if (provider === "native") {
-      try {
-        const token = await this.getLocalAuthToken();
-        await fetch(`${this.ENDPOINT_LOCAL}/stop`, {
-          method: "POST",
-          headers: { "X-VIP-Token": token }
-        });
-      } catch (e) {}
-    } else if (provider === "evolution" && serverUrl && apiKey) {
-      try {
-        await fetch(`${serverUrl}/instance/logout/${instance}`, {
-          method: "DELETE",
-          headers: { "apikey": apiKey }
-        });
-      } catch (e) {}
-    } else if (provider === "zapi" && serverUrl) {
-      try {
-        const headers = apiKey ? { "Client-Token": apiKey } : {};
-        await fetch(`${serverUrl}/disconnect`, { headers });
-      } catch (e) {}
-    }
+    try {
+      const token = await this.getLocalAuthToken();
+      await fetch(`${this.ENDPOINT_LOCAL}/stop`, {
+        method: "POST",
+        headers: { "X-VIP-Token": token }
+      });
+    } catch (e) {}
 
     await this.saveConfig({
       connected: false,
@@ -2162,19 +1828,16 @@ const VIPWhatsAppGateway = {
     }
   },
 
-  // Envio Universal Silencioso Blindado
-  async sendMessage(phone, message, orderId = null, templateKey = null) {
+  // Envio Silencioso de Mensagem WhatsApp
+  async sendMessage(phone, message) {
     const cleanNum = this.cleanPhone(phone);
     if (!cleanNum) throw new Error("Número de telefone inválido para envio.");
 
-    const provider = this.config.provider || "native";
-    const status = await this.checkStatus();
-
-    // 1. MOTOR NATIVO LOCAL BLINDADO (PORTA 18182)
-    if (provider === "native" || (status && status.mode === "local" && status.connected)) {
+    // 1. Tenta envio direto pelo serviço local (Porta 18182)
+    try {
       const token = await this.getLocalAuthToken();
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 25000);
+      const timeoutId = setTimeout(() => controller.abort(), 35000);
       const res = await fetch(`${this.ENDPOINT_LOCAL}/send`, {
         method: "POST",
         headers: {
@@ -2185,161 +1848,54 @@ const VIPWhatsAppGateway = {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `Erro HTTP no serviço local: ${res.status}`);
-      }
-      const data = await res.json();
-      return { ...data, mode: "local", provider: "native", phone: cleanNum };
-    }
-
-    // 2. Se estiver conectado via Nuvem (Evolution / Z-API / Simulator)
-    if (status && status.connected && status.mode === "cloud") {
-      const serverUrl = this.cleanBaseUrl(this.config.serverUrl);
-      const instance = (this.config.instanceName || "salgadosvip").trim();
-      const apiKey = (this.config.apiKey || "").trim();
-
-      // MODO SIMULADO
-      if (provider === "simulator") {
-        await new Promise(r => setTimeout(r, 600));
-        console.log(`[WhatsApp Simulado] Mensagem silenciosa entregue para ${cleanNum}:`, message);
-        return { success: true, mode: "cloud", provider: "simulator", phone: cleanNum };
-      }
-
-      // EVOLUTION API
-      if (provider === "evolution") {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        const res = await fetch(`${serverUrl}/message/sendText/${instance}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "apikey": apiKey
-          },
-          body: JSON.stringify({
-            number: cleanNum,
-            text: message,
-            delay: 1000
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Evolution API erro HTTP ${res.status}: ${errText}`);
-        }
-
+      if (res.ok) {
         const data = await res.json();
-        return { success: true, mode: "cloud", provider: "evolution", phone: cleanNum, response: data };
+        return { ...data, mode: "local", phone: cleanNum };
       }
+    } catch (errLocal) {}
 
-      // Z-API
-      if (provider === "zapi") {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 25000);
-        const headers = { "Content-Type": "application/json" };
-        if (apiKey) headers["Client-Token"] = apiKey;
-
-        const res = await fetch(`${serverUrl}/send-text`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            phone: cleanNum,
-            message: message
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          const errText = await res.text();
-          throw new Error(`Z-API erro HTTP ${res.status}: ${errText}`);
+    // 2. Se local não respondeu, enfileira no Supabase whatsapp_messages_queue para a loja processar
+    try {
+      const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
+      if (sb) {
+        const { error } = await sb.from("whatsapp_messages_queue").insert([{
+          phone: cleanNum,
+          message: message,
+          status: "pending",
+          created_at: new Date().toISOString()
+        }]);
+        if (!error) {
+          return { success: true, queued: true, mode: "cloud_queue", phone: cleanNum };
         }
-
-        const data = await res.json();
-        return { success: true, mode: "cloud", provider: "zapi", phone: cleanNum, response: data };
       }
-    }
+    } catch (errSb) {}
 
-    throw new Error("Robô de WhatsApp não está conectado no momento.");
+    throw new Error("Robô de WhatsApp não está conectado no momento. Inicie o serviço no computador da loja.");
   }
 };
 
 window.VIPWhatsAppLocalService = VIPWhatsAppGateway;
 window.VIPWhatsAppGateway = VIPWhatsAppGateway;
 
-window.selectWhatsAppProvider = function(providerId) {
-  VIPWhatsAppGateway.config.provider = providerId;
-  VIPWhatsAppGateway.updateUIConfigFields();
-  VIPWhatsAppGateway.saveConfig({ provider: providerId });
-  const urlInput = document.getElementById("cfg-wa-cloud-url");
-  if (urlInput) {
-    if (providerId === "evolution" && !urlInput.value) {
-      urlInput.placeholder = "https://api-wa.sua-loja.up.railway.app";
-    } else if (providerId === "zapi" && !urlInput.value) {
-      urlInput.placeholder = "https://api.z-api.io/instances/ID/token/TOKEN";
-    } else if (providerId === "simulator") {
-      urlInput.placeholder = "Modo de testes ativo (sem necessidade de servidor)";
-    }
-  }
-  if (typeof window.checkWhatsAppSilentServiceStatus === "function") {
-    window.checkWhatsAppSilentServiceStatus(false);
-  }
+// Aliases para compatibilidade e botões
+window.startWhatsAppWebConnect = window.startWhatsAppCloudConnect = function() {
+  VIPWhatsAppGateway.connectAndShowQR();
 };
 
-window.saveWhatsAppCloudConfig = async function(showFeedback = true) {
-  const urlInput = document.getElementById("cfg-wa-cloud-url");
-  const instInput = document.getElementById("cfg-wa-cloud-instance");
-  const tokenInput = document.getElementById("cfg-wa-cloud-token");
-
-  const newCfg = {
-    serverUrl: urlInput ? urlInput.value.trim() : "",
-    instanceName: instInput ? instInput.value.trim() : "salgadosvip",
-    apiKey: tokenInput ? tokenInput.value.trim() : ""
-  };
-
-  await VIPWhatsAppGateway.saveConfig(newCfg, true);
-  if (showFeedback && typeof showToastNotification === "function") {
-    showToastNotification("✓ Configurações de WhatsApp em Nuvem salvas e sincronizadas!");
-  }
-  await window.checkWhatsAppSilentServiceStatus(false);
+window.cancelWhatsAppWebConnect = window.cancelWhatsAppCloudConnect = function() {
+  VIPWhatsAppGateway.cancelConnect();
 };
 
-window.startWhatsAppCloudConnect = async function() {
-  await VIPWhatsAppGateway.connectAndShowQR();
+window.disconnectWhatsAppWeb = window.disconnectWhatsAppCloud = function() {
+  VIPWhatsAppGateway.disconnect();
 };
 
-window.cancelWhatsAppCloudConnect = function() {
-  VIPWhatsAppGateway.stopPollingAndTimers();
-  const paneOffline = document.getElementById("wa-silent-status-offline");
-  const paneQr = document.getElementById("wa-silent-status-qr");
-  if (paneQr) paneQr.style.display = "none";
-  if (paneOffline) paneOffline.style.display = "block";
-  const badgeEl = document.getElementById("wa-silent-global-badge");
-  if (badgeEl) {
-    badgeEl.className = "wa-status-pill offline";
-    badgeEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Desconectado`;
-  }
-};
+// Stubs para evitar qualquer ReferenceError de chamadas legadas
+window.selectWhatsAppProvider = function() {};
+window.saveWhatsAppCloudConfig = function() {};
+window.openWhatsAppCloudHelpModal = function() {};
+window.closeWhatsAppCloudHelpModal = function() {};
 
-window.disconnectWhatsAppCloud = async function() {
-  await VIPWhatsAppGateway.disconnect();
-};
-
-window.openWhatsAppCloudHelpModal = function() {
-  const modal = document.getElementById("modal-wa-cloud-help");
-  const backdrop = document.getElementById("modal-wa-cloud-help-backdrop");
-  if (modal) modal.style.display = "block";
-  if (backdrop) backdrop.style.display = "block";
-};
-
-window.closeWhatsAppCloudHelpModal = function() {
-  const modal = document.getElementById("modal-wa-cloud-help");
-  const backdrop = document.getElementById("modal-wa-cloud-help-backdrop");
-  if (modal) modal.style.display = "none";
-  if (backdrop) backdrop.style.display = "none";
-};
 
 // Atualiza a interface do robô silencioso no painel
 window.checkWhatsAppSilentServiceStatus = async function(showFeedback = false) {

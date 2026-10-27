@@ -41,7 +41,7 @@ except ImportError:
     sys.exit(1)
 
 PORT = 18182
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 
 # Diretórios persistentes
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -179,27 +179,36 @@ class WhatsAppBotManager:
         self.cloud_thread = threading.Thread(target=self._run_supabase_bridge, daemon=True)
         self.cloud_thread.start()
 
-    def _init_driver(self):
-        # Limpeza preventiva de processos fantasmas e lockfiles órfãos
+    def _clean_locks_and_zombies(self):
+        """Limpa preventivamente processos órfãos de Edge/Chrome e travas do perfil"""
         try:
-            lockfile = os.path.join(PROFILE_DIR, "lockfile")
-            if os.path.exists(lockfile):
-                import subprocess
-                subprocess.run(
-                    'powershell -NoProfile -Command "Get-CimInstance Win32_Process -Filter \\"name = \'msedge.exe\'\\" | Where-Object { $_.CommandLine -like \'*SalgadosVIP*\' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force }"',
-                    shell=True,
-                    capture_output=True,
-                    timeout=6
-                )
-                time.sleep(1)
-                if os.path.exists(lockfile):
-                    os.remove(lockfile)
+            import subprocess
+            cmd = [
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+                "Get-CimInstance Win32_Process | "
+                "Where-Object { ($_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe') -and ($_.CommandLine -like '*SalgadosVIP*' -or $_.CommandLine -like '*WhatsAppProfile*') } | "
+                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+            ]
+            subprocess.run(cmd, capture_output=True, timeout=8)
+            time.sleep(1)
         except Exception as err:
-            print(f"[*] Aviso limpeza lockfile: {err}")
+            print(f"[*] Aviso limpeza processos: {err}")
+
+        import glob
+        for pattern in ["lockfile*", "Singleton*"]:
+            for f in glob.glob(os.path.join(PROFILE_DIR, pattern)):
+                try:
+                    os.remove(f)
+                    print(f"[*] Removido arquivo de bloqueio órfão: {f}")
+                except Exception:
+                    pass
+
+    def _init_driver(self):
+        self._clean_locks_and_zombies()
 
         opts = Options()
         opts.add_argument(f"--user-data-dir={PROFILE_DIR}")
-        opts.add_argument("--headless=new")
+        opts.add_argument("--headless")
         opts.add_argument("--disable-gpu")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
@@ -208,12 +217,33 @@ class WhatsAppBotManager:
         opts.add_argument("--no-first-run")
         opts.add_argument("--no-default-browser-check")
         opts.add_argument("--disable-blink-features=AutomationControlled")
+        opts.add_argument("--disable-features=IsolateOrigins,site-per-process,CalculateNativeWinOcclusion")
         opts.add_experimental_option("excludeSwitches", ["enable-automation"])
         opts.add_experimental_option("useAutomationExtension", False)
 
-        print(f"[*] Inicializando navegador Edge com perfil em: {PROFILE_DIR}")
-        self.driver = webdriver.Edge(options=opts)
-        self.driver.set_page_load_timeout(60)
+        print(f"[*] Inicializando navegador com perfil em: {PROFILE_DIR}")
+        try:
+            self.driver = webdriver.Edge(options=opts)
+        except Exception as edge_err:
+            print(f"[*] Edge falhou ({edge_err}). Tentando Google Chrome como alternativa...")
+            try:
+                from selenium.webdriver.chrome.options import Options as ChromeOptions
+                ch_opts = ChromeOptions()
+                ch_opts.add_argument(f"--user-data-dir={PROFILE_DIR}")
+                ch_opts.add_argument("--headless")
+                ch_opts.add_argument("--disable-gpu")
+                ch_opts.add_argument("--no-sandbox")
+                ch_opts.add_argument("--disable-dev-shm-usage")
+                ch_opts.add_argument(f"--user-agent={USER_AGENT}")
+                ch_opts.add_argument("--window-size=1280,800")
+                ch_opts.add_argument("--no-first-run")
+                ch_opts.add_argument("--no-default-browser-check")
+                ch_opts.add_argument("--disable-blink-features=AutomationControlled")
+                self.driver = webdriver.Chrome(options=ch_opts)
+            except Exception as chrome_err:
+                raise RuntimeError(f"Falha ao iniciar Edge ({edge_err}) e Chrome ({chrome_err})")
+
+        self.driver.set_page_load_timeout(50)
 
         # Oculta navigator.webdriver da Meta
         try:
@@ -225,20 +255,22 @@ class WhatsAppBotManager:
             pass
 
         self.driver.get("https://web.whatsapp.com")
-        print("[*] WhatsApp Web carregado. Aguardando sincronização...")
+        print("[*] WhatsApp Web carregado com sucesso. Aguardando sincronização...")
 
     def _run_driver_loop(self):
-        try:
-            self._init_driver()
-        except Exception as e:
-            self.status = "error"
-            self.last_error = str(e)
-            print(f"[!] Erro ao iniciar WebDriver: {e}")
-            return
-
         while self.running:
+            if not self.driver:
+                try:
+                    self._init_driver()
+                except Exception as e:
+                    self.status = "error"
+                    self.last_error = str(e)
+                    print(f"[!] Erro ao iniciar WebDriver: {e}. Tentando novamente em 6s...")
+                    time.sleep(6)
+                    continue
+
             try:
-                time.sleep(3)
+                time.sleep(2.5)
                 if not self.driver:
                     continue
 
@@ -255,7 +287,7 @@ class WhatsAppBotManager:
 
                     if is_logged:
                         if not self.connected:
-                            print("\n[OK] WhatsApp Conectado com sucesso! Pronto para envios silenciosos.\n")
+                            print("[OK] WhatsApp Conectado com sucesso! Pronto para envios silenciosos.")
                         self.connected = True
                         self.status = "connected"
                         self.qr_code_data = None # Destrói QR code após pareamento seguro
@@ -279,8 +311,17 @@ class WhatsAppBotManager:
                     else:
                         if not self.connected:
                             self.status = "starting"
-            except Exception:
-                pass
+            except Exception as loop_err:
+                err_str = str(loop_err).lower()
+                if "invalid session id" in err_str or "session not created" in err_str or "no such window" in err_str:
+                    print(f"[!] Sessão do navegador caiu ({loop_err}). Reiniciando...")
+                    try:
+                        self.driver.quit()
+                    except Exception:
+                        pass
+                    self.driver = None
+                    self.status = "error"
+                    self.connected = False
 
     def send_message(self, phone, message):
         if not self.connected:
@@ -304,13 +345,13 @@ class WhatsAppBotManager:
                 sent = False
                 error_msg = None
 
-                while time.time() - start_wait < 25:
-                    time.sleep(1)
+                while time.time() - start_wait < 35:
+                    time.sleep(1.5)
 
                     # Verifica se apareceu popup de número inválido
                     invalid_popup = self.driver.execute_script("""
                         const popup = document.querySelector('div[data-animate-modal-popup="true"]');
-                        if (popup && (popup.innerText.includes('invalido') || popup.innerText.includes('inválido'))) {
+                        if (popup && (popup.innerText.includes('invalido') || popup.innerText.includes('inválido') || popup.innerText.includes('invalid'))) {
                             const btnOk = popup.querySelector('button');
                             if (btnOk) btnOk.click();
                             return true;
@@ -321,17 +362,19 @@ class WhatsAppBotManager:
                         error_msg = "O número informado não possui WhatsApp ou é inválido."
                         break
 
-                    # Tenta clicar no botão de enviar oficial
+                    # Tenta clicar no botão de enviar oficial ou despachar Enter no input
                     clicked = self.driver.execute_script("""
-                        const btn = document.querySelector('button[aria-label="Enviar"], span[data-icon="send"]');
+                        const btn = document.querySelector('button[aria-label="Enviar"], span[data-icon="send"], span[data-icon="wds-ic-send-filled"], button[data-tab="11"], button[aria-label="Send"]');
                         if (btn) {
                             btn.click();
                             return true;
                         }
                         const input = document.querySelector('footer div[contenteditable="true"]');
                         if (input && input.innerText.trim().length > 0) {
-                            const event = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true });
-                            input.dispatchEvent(event);
+                            const down = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true });
+                            const up = new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', which: 13, keyCode: 13, bubbles: true });
+                            input.dispatchEvent(down);
+                            input.dispatchEvent(up);
                             return true;
                         }
                         return false;
@@ -357,8 +400,8 @@ class WhatsAppBotManager:
         last_heartbeat = 0
         while self.running:
             now = time.time()
-            # 1. Envia heartbeat sem divulgar o QR Code bruto na nuvem (protegendo a sessão)
-            if now - last_heartbeat >= 4:
+            # 1. Envia heartbeat com status e QR code (se aguardando leitura)
+            if now - last_heartbeat >= 3:
                 last_heartbeat = now
                 try:
                     status_text = "Conectado e pronto (Servidor da Loja Ativo)" if self.connected else (
@@ -372,6 +415,7 @@ class WhatsAppBotManager:
                             "status": self.status,
                             "statusText": status_text,
                             "hasQr": bool(self.qr_code_data),
+                            "qrCode": self.qr_code_data if (self.status == "qr_ready" and self.qr_code_data) else None,
                             "lastHeartbeat": int(now * 1000),
                             "hostname": socket.gethostname(),
                             "port": PORT
@@ -389,39 +433,40 @@ class WhatsAppBotManager:
 
             # 2. Processar fila de mensagens pendentes disparadas autenticadas
             if self.connected:
-                try:
-                    items = supabase_request("whatsapp_queue?status=eq.pending&order=created_at.asc&limit=1")
-                    if items and isinstance(items, list) and len(items) > 0:
-                        item = items[0]
-                        item_id = item.get("id")
-                        phone = item.get("phone")
-                        msg = item.get("message")
-                        origin = item.get("device_origin") or "Remoto"
+                for q_table in ["whatsapp_queue", "whatsapp_messages_queue"]:
+                    try:
+                        items = supabase_request(f"{q_table}?status=eq.pending&order=created_at.asc&limit=1")
+                        if items and isinstance(items, list) and len(items) > 0:
+                            item = items[0]
+                            item_id = item.get("id")
+                            phone = item.get("phone")
+                            msg = item.get("message")
 
-                        supabase_request(
-                            f"whatsapp_queue?id=eq.{item_id}",
-                            method="PATCH",
-                            data={"status": "processing"}
-                        )
-
-                        res = self.send_message(phone, msg)
-                        iso_now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-
-                        if res and res.get("success"):
                             supabase_request(
-                                f"whatsapp_queue?id=eq.{item_id}",
+                                f"{q_table}?id=eq.{item_id}",
                                 method="PATCH",
-                                data={"status": "sent", "processed_at": iso_now, "error": None}
+                                data={"status": "processing"}
                             )
-                        else:
-                            err_msg = res.get("error") if res else "Falha ao enviar mensagem"
-                            supabase_request(
-                                f"whatsapp_queue?id=eq.{item_id}",
-                                method="PATCH",
-                                data={"status": "failed", "processed_at": iso_now, "error": err_msg}
-                            )
-                except Exception as e:
-                    print(f"[*] Erro ao processar fila do Supabase: {e}")
+
+                            res = self.send_message(phone, msg)
+                            iso_now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+                            if res and res.get("success"):
+                                supabase_request(
+                                    f"{q_table}?id=eq.{item_id}",
+                                    method="PATCH",
+                                    data={"status": "sent", "processed_at": iso_now, "error": None}
+                                )
+                            else:
+                                err_msg = res.get("error") if res else "Falha ao enviar mensagem"
+                                supabase_request(
+                                    f"{q_table}?id=eq.{item_id}",
+                                    method="PATCH",
+                                    data={"status": "failed", "processed_at": iso_now, "error": err_msg}
+                                )
+                            break
+                    except Exception as e:
+                        pass
 
             time.sleep(1.5)
 
@@ -436,6 +481,7 @@ class WhatsAppBotManager:
                     "status": "offline",
                     "statusText": "Serviço Offline",
                     "hasQr": False,
+                    "qrCode": None,
                     "lastHeartbeat": int(time.time() * 1000)
                 },
                 "updated_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

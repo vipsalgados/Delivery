@@ -69,7 +69,7 @@
 
       <div class="login-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.82rem;">
         <a href="index.html" class="back-to-store-link"><i class="fa-solid fa-arrow-left"></i> Voltar ao Cardápio</a>
-        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v39.0 (Bkp 39)</span>
+        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v40.0 (Bkp 40)</span>
         <a href="javascript:void(0)" onclick="openRecoveryModal()" style="color: #64748b; text-decoration: none; font-weight: 600;"><i class="fa-solid fa-shield-halved"></i> Recuperar Acesso</a>
       </div>
     </div>
@@ -175,7 +175,7 @@
 
         <div class="sidebar-footer">
           <div style="padding: 4px 10px; margin-bottom: 6px; font-size: 0.72rem; color: #94a3b8; text-align: center; font-family: ui-monospace, monospace;">
-            v39.0 (Bkp 39)
+            v40.0 (Bkp 40)
           </div>
           <button type="button" class="btn-sidebar-collapse" onclick="toggleSidebarMenu()" title="Recolher menu lateral para liberar visão da tela inteira">
             <i class="fa-solid fa-angles-left"></i>
@@ -1532,8 +1532,7 @@
                     </button>
                   </div>
                 </div>
-
-                <!-- Central WhatsApp em Nuvem (Multi-Dispositivos & 100% Silencioso) -->
+                <!-- WhatsApp Web - Conexão Direta via QR Code (100% Silencioso) -->
                 <div class="wa-config-card" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 14px; padding: 1.25rem; margin-top: 1.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.04);">
                   <!-- Top Bar com Identificação e Status Global -->
                   <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.85rem;">
@@ -1543,85 +1542,19 @@
                       </div>
                       <div>
                         <h4 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 6px;">
-                          Central WhatsApp em Nuvem 
-                          <span style="font-size: 0.72rem; font-weight: 700; background: #e0e7ff; color: #3730a3; padding: 2px 8px; border-radius: 999px;">Multi-Dispositivos</span>
+                          WhatsApp Web - Conexão via QR Code
+                          <span style="font-size: 0.72rem; font-weight: 700; background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 999px;">Envio Silencioso</span>
                         </h4>
-                        <small style="color: #64748b;">Conecte direto pelo navegador via QR Code. Envie mensagens silenciosas de qualquer computador ou celular (Netlify, PC de casa ou loja).</small>
+                        <small style="color: #64748b;">Conecte diretamente pelo QR Code do WhatsApp Web. Envio 100% automático em segundo plano sem abrir nenhuma janela.</small>
                       </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px;">
-                      <button type="button" class="btn-outline-admin" onclick="openWhatsAppCloudHelpModal()" style="font-size: 0.8rem; padding: 5px 12px; color: #0369a1; border-color: #bae6fd; background: #f0f9ff;" title="Guia passo a passo de configuração">
-                        <i class="fa-solid fa-circle-question"></i> Como Funciona / Guia
-                      </button>
                       <button type="button" class="btn-outline-admin" onclick="checkWhatsAppSilentServiceStatus(true)" style="font-size: 0.8rem; padding: 5px 12px;" title="Verificar conexão em tempo real">
                         <i class="fa-solid fa-rotate"></i> Atualizar Status
                       </button>
                       <div id="wa-silent-badge-container">
                         <span id="wa-silent-global-badge" class="wa-status-pill offline"><i class="fa-solid fa-circle-dot"></i> Verificando Conexão...</span>
                       </div>
-                    </div>
-                  </div>
-
-                  <!-- Seção de Configuração do Provedor de Nuvem (Evolution API / Z-API / Custom) -->
-                  <div class="wa-cloud-config-box" style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 1rem;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px;">
-                      <label style="font-size: 0.85rem; font-weight: 800; color: #1e293b; display: flex; align-items: center; gap: 6px;">
-                        <i class="fa-solid fa-cloud" style="color: #0284c7;"></i> Provedor de Gateway WhatsApp:
-                      </label>
-                      <div class="wa-provider-pills" style="display: flex; gap: 6px; flex-wrap: wrap;">
-                        <button type="button" class="wa-provider-pill active" id="btn-provider-native" onclick="selectWhatsAppProvider('native')">
-                          <i class="fa-solid fa-laptop-code"></i> WhatsApp Silencioso Local (Nativo - Zero Janelas)
-                        </button>
-                        <button type="button" class="wa-provider-pill" id="btn-provider-evolution" onclick="selectWhatsAppProvider('evolution')">
-                          <i class="fa-solid fa-server"></i> Evolution API (Nuvem)
-                        </button>
-                        <button type="button" class="wa-provider-pill" id="btn-provider-zapi" onclick="selectWhatsAppProvider('zapi')">
-                          <i class="fa-solid fa-bolt"></i> Z-API
-                        </button>
-                        <button type="button" class="wa-provider-pill" id="btn-provider-simulator" onclick="selectWhatsAppProvider('simulator')">
-                          <i class="fa-solid fa-vial"></i> Demonstração
-                        </button>
-                      </div>
-                    </div>
-
-                    <!-- Mensagem do Provedor Nativo Local -->
-                    <div id="cfg-wa-native-box" style="display: block; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 8px; padding: 10px 14px; font-size: 0.83rem; color: #065f46; margin-bottom: 4px;">
-                      <div style="font-weight: 800; display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                        <i class="fa-solid fa-shield-halved" style="color: #059669;"></i> Motor WhatsApp Silencioso Blindado (Porta 18182)
-                      </div>
-                      <span>Automação em segundo plano com autenticação criptográfica segura. Acesse o WhatsApp Web anonimamente sem abrir abas ou janelas durante o expediente da loja.</span>
-                    </div>
-
-                    <div id="cfg-wa-cloud-grid" style="display: none; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; align-items: flex-end;">
-                      <div>
-                        <label for="cfg-wa-cloud-url" style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">
-                          URL da API na Nuvem *
-                        </label>
-                        <input type="text" id="cfg-wa-cloud-url" placeholder="https://api-wa.sua-loja.up.railway.app" style="width: 100%; font-size: 0.82rem; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                      </div>
-
-                      <div id="cfg-wa-instance-col">
-                        <label for="cfg-wa-cloud-instance" style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">
-                          Nome da Instância *
-                        </label>
-                        <input type="text" id="cfg-wa-cloud-instance" placeholder="salgadosvip" value="salgadosvip" style="width: 100%; font-size: 0.82rem; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                      </div>
-
-                      <div>
-                        <label for="cfg-wa-cloud-token" style="display: block; font-size: 0.78rem; font-weight: 700; color: #475569; margin-bottom: 4px;">
-                          Token / API Key *
-                        </label>
-                        <input type="password" id="cfg-wa-cloud-token" placeholder="Chave de autenticação" style="width: 100%; font-size: 0.82rem; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;">
-                      </div>
-
-                      <div>
-                        <button type="button" class="btn-outline-admin" onclick="saveWhatsAppCloudConfig(true)" style="width: 100%; font-size: 0.82rem; padding: 7px 12px; background: #0284c7; color: #fff; border-color: #0284c7; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                          <i class="fa-solid fa-cloud-arrow-up"></i> Salvar & Sincronizar
-                        </button>
-                      </div>
-                    </div>
-                    <div style="font-size: 0.74rem; color: #64748b; margin-top: 6px; display: flex; align-items: center; gap: 5px;">
-                      <i class="fa-solid fa-shield-halved" style="color: #059669;"></i> As credenciais salvas aqui são sincronizadas instantaneamente no Supabase para todos os computadores e celulares da sua loja!
                     </div>
                   </div>
 
@@ -1638,30 +1571,30 @@
                       </div>
                       <h4 style="margin: 0 0 6px; color: #0f172a; font-size: 1.05rem; font-weight: 800;">Conectar WhatsApp da Loja via QR Code</h4>
                       <p style="font-size: 0.85rem; color: #64748b; max-width: 540px; margin: 0 auto 14px; line-height: 1.45;">
-                        Gere o QR Code diretamente nesta tela e escaneie com o celular da loja (Salgados VIP). A sessão ficará salva na nuvem 24/7 para envio 100% silencioso em qualquer computador ou smartphone!
+                        Clique no botão abaixo para gerar o QR Code oficial do WhatsApp Web. Em seguida, aponte a câmera do WhatsApp da loja para conectar.
                       </p>
-                      <button type="button" id="btn-start-wa-silent" class="btn-wa-single-launcher" onclick="startWhatsAppCloudConnect()" style="font-size: 0.95rem; padding: 10px 24px;">
+                      <button type="button" id="btn-start-wa-silent" class="btn-wa-single-launcher" onclick="startWhatsAppWebConnect()" style="font-size: 0.95rem; padding: 10px 24px;">
                         <i class="fa-solid fa-qrcode"></i> Gerar QR Code & Conectar
                       </button>
                     </div>
 
                     <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 12px; font-size: 0.78rem; color: #64748b; display: flex; flex-direction: column; gap: 4px;">
-                      <span><i class="fa-solid fa-circle-check" style="color: #059669;"></i> <strong>Zero Dependência Local:</strong> Não precisa de nenhum computador Windows ligado ou arquivos .py rodando.</span>
-                      <span><i class="fa-solid fa-circle-check" style="color: #2563eb;"></i> <strong>Multi-Dispositivo:</strong> Funciona 100% no Netlify, celulares, notebooks e computadores de casa ou do balcão.</span>
-                      <span><i class="fa-solid fa-circle-check" style="color: #d97706;"></i> <strong>Zero Janelas:</strong> Mensagens de status do pedido e despacho de motoboy são enviadas silenciosamente em segundo plano.</span>
+                      <span><i class="fa-solid fa-circle-check" style="color: #059669;"></i> <strong>Zero Janelas / Pop-ups:</strong> Os envios ocorrem diretamente em segundo plano sem interferir no uso do computador.</span>
+                      <span><i class="fa-solid fa-circle-check" style="color: #2563eb;"></i> <strong>Envio Automático:</strong> Notifique o cliente sobre cada etapa do pedido (Confirmado, Na Cozinha, Saiu p/ Entrega).</span>
+                      <span><i class="fa-solid fa-circle-check" style="color: #d97706;"></i> <strong>Despacho de Motoboy:</strong> Envie o resumo da entrega com endereço e valor ao motoboy com um clique.</span>
                     </div>
                   </div>
 
                   <!-- Painel Estado 2: QR Code na Tela (Aguardando Leitura) -->
                   <div id="wa-silent-status-qr" class="wa-silent-status-card is-qr" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                      <div class="wa-silent-status-badge"><i class="fa-solid fa-qrcode"></i> QR Code Pronto para Conexão!</div>
+                      <div class="wa-silent-status-badge"><i class="fa-solid fa-qrcode"></i> QR Code do WhatsApp Web</div>
                       <div style="display: flex; align-items: center; gap: 8px;">
                         <span id="wa-qr-timer" style="font-size: 0.78rem; color: #b45309; font-weight: 700;"><i class="fa-regular fa-clock"></i> Expira em 60s</span>
-                        <button type="button" class="btn-outline-admin" onclick="startWhatsAppCloudConnect()" style="font-size: 0.78rem; padding: 4px 10px;">
-                          <i class="fa-solid fa-rotate"></i> Gerar Novo QR
+                        <button type="button" class="btn-outline-admin" onclick="startWhatsAppWebConnect()" style="font-size: 0.78rem; padding: 4px 10px;">
+                          <i class="fa-solid fa-rotate"></i> Atualizar QR Code
                         </button>
-                        <button type="button" class="btn-outline-admin" onclick="cancelWhatsAppCloudConnect()" style="font-size: 0.78rem; padding: 4px 10px; color: #dc2626; border-color: #fca5a5;">
+                        <button type="button" class="btn-outline-admin" onclick="cancelWhatsAppWebConnect()" style="font-size: 0.78rem; padding: 4px 10px; color: #dc2626; border-color: #fca5a5;">
                           <i class="fa-solid fa-xmark"></i> Cancelar
                         </button>
                       </div>
@@ -1671,7 +1604,7 @@
                       <!-- Instruções -->
                       <div style="background: #fff; border: 1.5px solid #fde68a; border-radius: 10px; padding: 14px 16px;">
                         <strong style="color: #92400e; font-size: 0.95rem; display: block; margin-bottom: 8px;">
-                          <i class="fa-solid fa-mobile-screen-button"></i> Como escanear no celular:
+                          <i class="fa-solid fa-mobile-screen-button"></i> Como escanear no celular da loja:
                         </strong>
                         <ol style="margin: 0; padding-left: 20px; font-size: 0.85rem; color: #78350f; line-height: 1.7;">
                           <li>Abra o WhatsApp no aparelho da loja (Salgados VIP).</li>
@@ -1681,17 +1614,17 @@
                         </ol>
                         <div style="margin-top: 12px; padding: 8px 10px; background: #fffbeb; border-radius: 6px; font-size: 0.78rem; color: #b45309; display: flex; align-items: center; gap: 8px;">
                           <i class="fa-solid fa-spinner fa-spin"></i>
-                          <span>Aguardando leitura do QR Code... O app reconhecerá a conexão automaticamente assim que bipar!</span>
+                          <span>Aguardando leitura do QR Code... Reconhece a conexão automaticamente após a leitura!</span>
                         </div>
                       </div>
 
                       <!-- Imagem QR Code -->
                       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
                         <div style="background: #ffffff; padding: 12px; border-radius: 14px; border: 3px solid #059669; box-shadow: 0 8px 24px rgba(5,150,105,0.2); position: relative;">
-                          <img id="wa-silent-qr-img" src="" alt="QR Code WhatsApp" style="width: 220px; height: 220px; display: block; border-radius: 8px;">
+                          <img id="wa-silent-qr-img" src="" alt="QR Code WhatsApp Web" style="width: 220px; height: 220px; display: block; border-radius: 8px;">
                         </div>
                         <small style="color: #64748b; font-size: 0.76rem; margin-top: 8px;">
-                          Instância: <strong id="wa-qr-instance-label">salgadosvip</strong>
+                          <i class="fa-solid fa-shield-halved" style="color: #059669;"></i> WhatsApp Web Oficial
                         </small>
                       </div>
                     </div>
@@ -1700,18 +1633,18 @@
                   <!-- Painel Estado 3: Conectado & Ativo -->
                   <div id="wa-silent-status-connected" class="wa-silent-status-card is-connected" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                      <div class="wa-silent-status-badge"><i class="fa-solid fa-circle-check"></i> WhatsApp Conectado na Nuvem!</div>
+                      <div class="wa-silent-status-badge"><i class="fa-solid fa-circle-check"></i> WhatsApp Conectado com Sucesso!</div>
                       <div style="display: flex; align-items: center; gap: 8px;">
                         <span id="wa-conn-phone-badge" style="font-size: 0.8rem; background: #dcfce7; color: #166534; font-weight: 800; padding: 3px 10px; border-radius: 999px; border: 1px solid #86efac;">
-                          <i class="fa-solid fa-phone"></i> +55 (21) 98675-8102
+                          <i class="fa-solid fa-phone"></i> Conectado
                         </span>
-                        <button type="button" class="btn-outline-admin" onclick="disconnectWhatsAppCloud()" style="font-size: 0.74rem; padding: 4px 10px; color: #dc2626; border-color: #fca5a5;" title="Desconectar sessão do WhatsApp">
+                        <button type="button" class="btn-outline-admin" onclick="disconnectWhatsAppWeb()" style="font-size: 0.74rem; padding: 4px 10px; color: #dc2626; border-color: #fca5a5;" title="Desconectar sessão do WhatsApp">
                           <i class="fa-solid fa-arrow-right-from-bracket"></i> Desconectar
                         </button>
                       </div>
                     </div>
                     <p id="wa-conn-subtext" style="font-size: 0.84rem; color: #166534; margin: 8px 0 10px; line-height: 1.45; font-weight: 600;">
-                      ✓ A sessão está autenticada na nuvem e pronta para disparar notificações em segundo plano sem abrir nenhuma janela em nenhum computador!
+                      ✓ WhatsApp conectado e pronto para disparar notificações em segundo plano sem abrir nenhuma janela!
                     </p>
                     <div style="background: #ffffff; border: 1px solid #86efac; border-radius: 8px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                       <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.84rem; font-weight: 700; color: #1e293b;">
@@ -2214,7 +2147,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 7px;">
           <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%;" title="Sistema Online e Operante"></span>
-          <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 39.0 (Bkp 39)</span>
+          <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 40.0 (Bkp 40)</span>
         </div>
       </footer>
 
@@ -3446,65 +3379,7 @@
       </button>
     </div>
   </div>
-
-  <!-- Modal de Ajuda / Configuração do WhatsApp em Nuvem -->
-  <div class="adm-modal-backdrop" id="modal-wa-cloud-help-backdrop" onclick="closeWhatsAppCloudHelpModal()" style="display: none;"></div>
-  <div class="adm-modal" id="modal-wa-cloud-help" style="max-width: 640px; display: none;">
-    <div class="adm-modal-header" style="background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #fff;">
-      <h3 style="margin: 0; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-        <i class="fa-brands fa-whatsapp"></i> Guia da Central WhatsApp em Nuvem
-      </h3>
-      <button type="button" class="btn-close-modal" onclick="closeWhatsAppCloudHelpModal()" style="color: #fff;">
-        <i class="fa-solid fa-xmark"></i>
-      </button>
-    </div>
-    <div class="adm-modal-body" style="padding: 1.25rem 1.5rem; max-height: 70vh; overflow-y: auto; color: #334155; font-size: 0.88rem; line-height: 1.6;">
-      <h4 style="color: #0f172a; margin-top: 0; font-size: 1rem;"><i class="fa-solid fa-cloud" style="color: #0284c7;"></i> Por que o modo Nuvem funciona em qualquer máquina?</h4>
-      <p>
-        O WhatsApp em Nuvem conecta o número da sua loja diretamente a um servidor online 24 horas (como a <strong>Evolution API</strong> ou <strong>Z-API</strong>). Diferente de scripts locais que dependiam de um computador Windows ligado, na nuvem a conexão fica ativa ininterruptamente.
-      </p>
-
-      <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 12px; margin: 12px 0;">
-        <strong style="color: #166534; display: block; margin-bottom: 4px;"><i class="fa-solid fa-circle-check"></i> Vantagens Imediatas:</strong>
-        <ul style="margin: 0; padding-left: 20px; color: #166534; font-size: 0.84rem;">
-          <li>Funciona perfeitamente no <strong>Netlify</strong> ou qualquer hospedagem web.</li>
-          <li>Qualquer computador, notebook, tablet ou celular pode enviar mensagens.</li>
-          <li>Zero janelas e zero pop-ups (envio 100% silencioso em segundo plano).</li>
-          <li>As credenciais são salvas no banco Supabase e sincronizadas automaticamente entre todos os dispositivos.</li>
-        </ul>
-      </div>
-
-      <h4 style="color: #0f172a; margin-top: 16px; font-size: 0.98rem;"><i class="fa-solid fa-server" style="color: #059669;"></i> Opção 1: Evolution API (Recomendada / Gratuita)</h4>
-      <p style="margin: 4px 0 8px;">A <strong>Evolution API</strong> é a solução de código aberto mais utilizada no mundo:</p>
-      <ol style="padding-left: 20px; margin: 4px 0 12px; font-size: 0.84rem; line-height: 1.6;">
-        <li>Você pode subir sua instância em 3 minutos no <strong>Railway</strong> ou <strong>Render</strong> (com templates prontos de 1 clique).</li>
-        <li>Copie a <strong>URL do Servidor</strong> gerada (ex: <code>https://api-wa.up.railway.app</code>).</li>
-        <li>Copie a <strong>API Key Global</strong> gerada.</li>
-        <li>Cole nos campos de configuração e clique em <strong>Salvar & Sincronizar</strong>.</li>
-        <li>Clique em <strong>Gerar QR Code</strong> e aponte o WhatsApp da loja para conectar!</li>
-      </ol>
-
-      <h4 style="color: #0f172a; margin-top: 16px; font-size: 0.98rem;"><i class="fa-solid fa-bolt" style="color: #d97706;"></i> Opção 2: Z-API (Plataforma Nacional)</h4>
-      <p style="margin: 4px 0 8px;">Se você já possui conta na <strong>Z-API</strong>:</p>
-      <ol style="padding-left: 20px; margin: 4px 0 12px; font-size: 0.84rem; line-height: 1.6;">
-        <li>Selecione <strong>Z-API</strong> nas opções de provedor.</li>
-        <li>Informe a URL da instância (<code>https://api.z-api.io/instances/ID/token/TOKEN</code>).</li>
-        <li>Insira o Token do Cliente (Client-Token) se ativado no painel da Z-API.</li>
-        <li>Clique em <strong>Salvar</strong> e conecte o QR Code na hora!</li>
-      </ol>
-
-      <h4 style="color: #0f172a; margin-top: 16px; font-size: 0.98rem;"><i class="fa-solid fa-vial" style="color: #8b5cf6;"></i> Opção 3: Modo Demonstração / Teste Imediato</h4>
-      <p style="margin: 4px 0 8px; font-size: 0.84rem;">
-        Deseja testar a interface imediatamente sem precisar de uma chave agora? Selecione <strong>Modo Demonstração</strong> e clique em "Gerar QR Code". O painel simulará a conexão e permitirá testar os envios silenciosos na hora!
-      </p>
-    </div>
-    <div class="adm-modal-footer" style="padding: 12px 1.5rem; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: flex-end;">
-      <button type="button" class="btn-primary-admin" onclick="closeWhatsAppCloudHelpModal()" style="font-size: 0.85rem; padding: 7px 16px;">
-        Entendido, Fechar Guia
-      </button>
-    </div>
-  </div>
-  <div id="thermal-receipt-area" class="thermal-receipt-area"></div>
+<div id="thermal-receipt-area" class="thermal-receipt-area"></div>
 
   <script src="supabase.min.js"></script>
   <script>
@@ -3512,8 +3387,8 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=39.1"></script>
-  <script src="admin.js?v=39.1"></script>
-  <script src="pwa.js?v=39.1"></script>
+  <script src="shared-data.js?v=40.0"></script>
+  <script src="admin.js?v=40.0"></script>
+  <script src="pwa.js?v=40.0"></script>
 </body>
 </html>
