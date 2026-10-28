@@ -1742,21 +1742,66 @@ const VIPWhatsAppGateway = {
     }
   },
 
-  // Conecta e exibe o QR Code na tela
+  // Conecta e exibe o QR Code na tela com carregamento inteligente e contínuo
   async connectAndShowQR() {
     const paneOffline = document.getElementById("wa-silent-status-offline");
     const paneQr = document.getElementById("wa-silent-status-qr");
     const paneConnected = document.getElementById("wa-silent-status-connected");
     const qrImg = document.getElementById("wa-silent-qr-img");
+    const qrSpinner = document.getElementById("wa-qr-loading-spinner");
     const badgeEl = document.getElementById("wa-silent-global-badge");
 
-    if (typeof showToastNotification === "function") {
-      showToastNotification("Verificando conexão com o WhatsApp Web...");
+    // Mostra painel de QR imediatamente em estado de carregamento amigável (Zero tela preta/vazia)
+    if (paneOffline) paneOffline.style.display = "none";
+    if (paneConnected) paneConnected.style.display = "none";
+    if (paneQr) paneQr.style.display = "block";
+    if (qrImg) qrImg.style.display = "none";
+    if (qrSpinner) qrSpinner.style.display = "flex";
+    if (badgeEl) {
+      badgeEl.className = "wa-status-pill qr";
+      badgeEl.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Inicializando QR Code...`;
     }
 
-    const statusData = await this.checkStatus();
+    if (typeof showToastNotification === "function") {
+      showToastNotification("Iniciando WhatsApp Web em segundo plano...");
+    }
 
+    // Função interna para checar se QR já está pronto
+    const tryFetchQR = async () => {
+      try {
+        const token = await this.getLocalAuthToken();
+        const headers = {};
+        if (token) headers["X-VIP-Token"] = token;
+        const qrRes = await fetch(`${this.ENDPOINT_LOCAL}/qr`, { headers });
+        if (qrRes.ok) {
+          const qrJson = await qrRes.json();
+          if (qrJson && qrJson.hasQr && qrJson.qrCode) {
+            return qrJson.qrCode;
+          }
+        }
+      } catch (e) {}
+
+      // Fallback: consulta Supabase se local demorar
+      try {
+        const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
+        if (sb) {
+          const { data: row } = await sb.from("store_settings")
+            .select("value")
+            .eq("id", "whatsapp_robot_status")
+            .maybeSingle();
+          if (row && row.value && row.value.hasQr && row.value.qrCode) {
+            return row.value.qrCode;
+          }
+        }
+      } catch (e) {}
+
+      return null;
+    };
+
+    // Primeiro teste rápido
+    let statusData = await this.checkStatus();
     if (statusData && statusData.connected) {
+      if (paneQr) paneQr.style.display = "none";
       await this.saveConfig({ connected: true, status: "connected" });
       await window.checkWhatsAppSilentServiceStatus(true);
       if (typeof showToastNotification === "function") {
@@ -1766,39 +1811,82 @@ const VIPWhatsAppGateway = {
     }
 
     let qrSrc = statusData ? statusData.qrCode : null;
-
-    // Se local, tenta buscar /qr direto
-    if (!qrSrc && statusData && statusData.mode === "local") {
-      try {
-        const token = await this.getLocalAuthToken();
-        const qrRes = await fetch(`${this.ENDPOINT_LOCAL}/qr`, {
-          headers: { "X-VIP-Token": token }
-        });
-        if (qrRes.ok) {
-          const qrJson = await qrRes.json();
-          qrSrc = qrJson.qrCode;
-        }
-      } catch (e) {}
+    if (!qrSrc) {
+      qrSrc = await tryFetchQR();
     }
 
     if (qrSrc) {
-      if (qrImg) qrImg.src = qrSrc;
-      if (paneOffline) paneOffline.style.display = "none";
-      if (paneConnected) paneConnected.style.display = "none";
-      if (paneQr) paneQr.style.display = "block";
-      if (badgeEl) {
-        badgeEl.className = "wa-status-pill qr";
-        badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Code Pronto`;
-      }
-      this.startCountdown(60);
-      this.startPollingConnection();
-    } else {
-      if (!statusData || !statusData.online) {
-        alert("O serviço WhatsApp Silencioso não está em execução.\n\nPor favor, execute o atalho 'Salgados VIP - WhatsApp Silencioso' na Área de Trabalho e clique novamente.");
-      } else {
-        alert("O WhatsApp Web está abrindo e sincronizando o QR Code em segundo plano.\nAguarde cerca de 5 segundos e clique novamente.");
-      }
+      this.displayReadyQR(qrSrc);
+      return;
     }
+
+    // Polling ativo de inicialização (aguarda até 40s para carregar o WhatsApp Web)
+    let attempts = 0;
+    const maxAttempts = 26; // 26 * 1.5s = 39 segundos
+    if (this.initPollTimer) clearInterval(this.initPollTimer);
+
+    this.initPollTimer = setInterval(async () => {
+      attempts++;
+      const currentStatus = await this.checkStatus();
+      if (currentStatus && currentStatus.connected) {
+        clearInterval(this.initPollTimer);
+        this.initPollTimer = null;
+        if (paneQr) paneQr.style.display = "none";
+        await this.saveConfig({ connected: true, status: "connected" });
+        await window.checkWhatsAppSilentServiceStatus(true);
+        if (typeof showToastNotification === "function") {
+          showToastNotification("✓ WhatsApp Conectado com Sucesso!");
+        }
+        return;
+      }
+
+      const foundQr = (currentStatus && currentStatus.qrCode) ? currentStatus.qrCode : await tryFetchQR();
+      if (foundQr) {
+        clearInterval(this.initPollTimer);
+        this.initPollTimer = null;
+        this.displayReadyQR(foundQr);
+        return;
+      }
+
+      if (attempts >= maxAttempts) {
+        clearInterval(this.initPollTimer);
+        this.initPollTimer = null;
+        if (qrSpinner) qrSpinner.style.display = "none";
+        if (paneQr) paneQr.style.display = "none";
+        if (paneOffline) paneOffline.style.display = "block";
+        if (badgeEl) {
+          badgeEl.className = "wa-status-pill offline";
+          badgeEl.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Desconectado`;
+        }
+        if (typeof showToastNotification === "function") {
+          showToastNotification("Tempo limite excedido. Certifique-se de que o robô está ativo.");
+        }
+      }
+    }, 1500);
+  },
+
+  displayReadyQR(qrSrc) {
+    const paneOffline = document.getElementById("wa-silent-status-offline");
+    const paneConnected = document.getElementById("wa-silent-status-connected");
+    const paneQr = document.getElementById("wa-silent-status-qr");
+    const qrImg = document.getElementById("wa-silent-qr-img");
+    const qrSpinner = document.getElementById("wa-qr-loading-spinner");
+    const badgeEl = document.getElementById("wa-silent-global-badge");
+
+    if (qrSpinner) qrSpinner.style.display = "none";
+    if (qrImg) {
+      qrImg.src = qrSrc;
+      qrImg.style.display = "block";
+    }
+    if (paneOffline) paneOffline.style.display = "none";
+    if (paneConnected) paneConnected.style.display = "none";
+    if (paneQr) paneQr.style.display = "block";
+    if (badgeEl) {
+      badgeEl.className = "wa-status-pill qr";
+      badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Code Pronto`;
+    }
+    this.startCountdown(60);
+    this.startPollingConnection();
   },
 
   startCountdown(seconds) {
@@ -1832,7 +1920,7 @@ const VIPWhatsAppGateway = {
 
     this.pollTimer = setInterval(async () => {
       attempts++;
-      if (attempts > 50) {
+      if (attempts > 60) {
         this.stopPollingAndTimers();
         return;
       }
@@ -1847,20 +1935,23 @@ const VIPWhatsAppGateway = {
             showToastNotification("✓ WhatsApp Conectado com Sucesso!");
           }
         } else if (status && status.qrCode) {
-          // Atualiza imagem do QR se o WhatsApp Web gerou um novo código
           const qrImg = document.getElementById("wa-silent-qr-img");
           if (qrImg && qrImg.src !== status.qrCode) {
             qrImg.src = status.qrCode;
           }
         }
       } catch (e) {}
-    }, 2500);
+    }, 2000);
   },
 
   stopPollingAndTimers() {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
+    }
+    if (this.initPollTimer) {
+      clearInterval(this.initPollTimer);
+      this.initPollTimer = null;
     }
     if (this.qrCountdownTimer) {
       clearInterval(this.qrCountdownTimer);
@@ -1887,7 +1978,7 @@ const VIPWhatsAppGateway = {
 
     try {
       const token = await this.getLocalAuthToken();
-      await fetch(`${this.ENDPOINT_LOCAL}/stop`, {
+      await fetch(`${this.ENDPOINT_LOCAL}/disconnect`, {
         method: "POST",
         headers: { "X-VIP-Token": token }
       });
@@ -1906,7 +1997,7 @@ const VIPWhatsAppGateway = {
   },
 
   // Envio Silencioso de Mensagem WhatsApp
-  async sendMessage(phone, message) {
+  async sendMessage(phone, message, orderId = null, templateKey = null) {
     const cleanNum = this.cleanPhone(phone);
     if (!cleanNum) throw new Error("Número de telefone inválido para envio.");
 
@@ -1931,15 +2022,18 @@ const VIPWhatsAppGateway = {
       }
     } catch (errLocal) {}
 
-    // 2. Se local não respondeu, enfileira no Supabase whatsapp_messages_queue para a loja processar
+    // 2. Se local não respondeu, enfileira no Supabase whatsapp_queue para a loja processar
     try {
       const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
       if (sb) {
-        const { error } = await sb.from("whatsapp_messages_queue").insert([{
+        const { error } = await sb.from("whatsapp_queue").insert([{
+          order_id: orderId || null,
           phone: cleanNum,
           message: message,
+          template_key: templateKey || null,
           status: "pending",
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          device_origin: typeof navigator !== "undefined" ? navigator.userAgent.substring(0, 100) : "Admin Panel"
         }]);
         if (!error) {
           return { success: true, queued: true, mode: "cloud_queue", phone: cleanNum };
@@ -2261,7 +2355,7 @@ window.copyWhatsAppNotificationText = function() {
   });
 };
 
-// Disparar envio de notificação (Híbrido: tenta envio silencioso primeiro, depois fallback wa.me)
+// Disparar envio de notificação (Híbrido e Seguro: silencioso prioritário, fallback wa.me garantido)
 window.triggerSendWhatsAppNotification = async function() {
   const orderId = activeWhatsAppNotifyOrderId;
   const orders = VIPDatabase.getOrders();
@@ -2284,15 +2378,16 @@ window.triggerSendWhatsAppNotification = async function() {
   const btnSend = document.getElementById("btn-send-wa-message");
   const origHtml = btnSend ? btnSend.innerHTML : "";
 
-  // 1. Tentar envio silencioso via robô local ou nuvem (sem abrir nenhuma janela)
+  // 1. Tentar envio silencioso se o robô estiver conectado
   let sentSilently = false;
-  try {
-    if (btnSend) {
-      btnSend.disabled = true;
-      btnSend.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Enviando em 2º plano...`;
-    }
-    const status = await VIPWhatsAppGateway.checkStatus();
-    if (status && status.connected) {
+  const isRobotConnected = VIPWhatsAppGateway.lastStatus && VIPWhatsAppGateway.lastStatus.connected;
+
+  if (isRobotConnected) {
+    try {
+      if (btnSend) {
+        btnSend.disabled = true;
+        btnSend.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Enviando em 2º plano...`;
+      }
       const res = await VIPWhatsAppGateway.sendMessage(phone, message, orderId, activeWhatsAppTemplateKey);
       if (res && res.success) {
         sentSilently = true;
@@ -2304,17 +2399,17 @@ window.triggerSendWhatsAppNotification = async function() {
         showToastNotification(`✓ Mensagem enviada silenciosamente para ${order.customer?.name || "o cliente"}${viaText}!`);
         return;
       }
-    }
-  } catch (err) {
-    console.info("[WhatsApp Silencioso] Serviço automático indisponível, abrindo WhatsApp Web...", err);
-  } finally {
-    if (btnSend) {
-      btnSend.disabled = false;
-      btnSend.innerHTML = origHtml;
+    } catch (err) {
+      console.info("[WhatsApp Silencioso] Falha no envio silencioso, alternando para WhatsApp Web...", err);
+    } finally {
+      if (btnSend) {
+        btnSend.disabled = false;
+        btnSend.innerHTML = origHtml;
+      }
     }
   }
 
-  // 2. Fallback: abre no WhatsApp Web (wa.me) caso o robô esteja desconectado
+  // 2. Fallback: abre no WhatsApp Web / App (wa.me)
   if (!sentSilently) {
     const waUrl = notifier.buildWhatsAppUrl(phone, message);
     if (!waUrl) {
@@ -2323,7 +2418,31 @@ window.triggerSendWhatsAppNotification = async function() {
     }
 
     VIPDatabase.recordOrderWhatsAppNotification(orderId, activeWhatsAppTemplateKey, message);
-    window.open(waUrl, "_blank");
+
+    // Tentativa direta de abertura da conversa
+    const win = window.open(waUrl, "_blank");
+
+    // Se o navegador bloqueou pop-up, exibe link direto no modal para clique imediato do operador
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      let fallbackBox = document.getElementById("wa-popup-blocked-banner");
+      if (!fallbackBox) {
+        fallbackBox = document.createElement("div");
+        fallbackBox.id = "wa-popup-blocked-banner";
+        fallbackBox.style.cssText = "margin-top:12px; padding:12px; background:#ecfdf5; border:1.5px solid #10b981; border-radius:8px; text-align:center;";
+        const modalBody = document.querySelector("#modal-whatsapp-notify .adm-modal-body");
+        if (modalBody) modalBody.appendChild(fallbackBox);
+      }
+      fallbackBox.innerHTML = `
+        <p style="margin:0 0 8px; color:#065f46; font-size:0.85rem; font-weight:700;">
+          <i class="fa-solid fa-circle-info"></i> Clique no botão abaixo para abrir o WhatsApp:
+        </p>
+        <a href="${waUrl}" target="_blank" onclick="closeWhatsAppNotifyModal()" class="btn-primary-wa" style="text-decoration:none; display:inline-flex; align-items:center; gap:8px; font-size:0.9rem; padding:8px 18px;">
+          <i class="fa-brands fa-whatsapp"></i> Continuar para o WhatsApp do Cliente
+        </a>
+      `;
+      showToastNotification("Clique no botão verde no modal para abrir a conversa.");
+      return;
+    }
 
     closeWhatsAppNotifyModal();
     renderLiveOrders();
@@ -2345,7 +2464,6 @@ window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
   const phone = order.customer?.phone || "";
 
   if (!notifier.isValidPhone(phone)) {
-    // Se o telefone não for válido, abre o modal para o usuário digitar
     openWhatsAppNotifyModal(orderId, null, templateKey);
     return;
   }
@@ -2354,10 +2472,9 @@ window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
   const templates = notifier.getTemplates(order, storeCfg);
   const tmpl = templates[templateKey] || templates["confirmado"];
 
-  // 1. Tentar envio silencioso em segundo plano (Local ou Nuvem)
-  try {
-    const status = await VIPWhatsAppGateway.checkStatus();
-    if (status && status.connected) {
+  // 1. Tentar envio silencioso se robô estiver conectado
+  if (VIPWhatsAppGateway.lastStatus && VIPWhatsAppGateway.lastStatus.connected) {
+    try {
       showToastNotification(`Enviando mensagem "${tmpl.label}" em segundo plano...`);
       const res = await VIPWhatsAppGateway.sendMessage(phone, tmpl.text, orderId, templateKey);
       if (res && res.success) {
@@ -2368,21 +2485,23 @@ window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
         showToastNotification(`✓ Mensagem "${tmpl.label}" enviada silenciosamente para ${order.customer?.name || "o cliente"}${viaText}!`);
         return;
       }
+    } catch (err) {
+      console.info("[WhatsApp Silencioso] Fallback para WhatsApp Web:", err);
     }
-  } catch (err) {
-    console.info("[WhatsApp Silencioso] Fallback para WhatsApp Web:", err);
   }
 
-  // 2. Fallback se serviço estiver offline
+  // 2. Fallback se não estiver conectado ou falhar envio silencioso
   const waUrl = notifier.buildWhatsAppUrl(phone, tmpl.text);
   if (waUrl) {
     VIPDatabase.recordOrderWhatsAppNotification(orderId, templateKey, tmpl.text);
-    window.open(waUrl, "_blank");
-    renderLiveOrders();
-    if (activeModalOrderId === orderId) {
-      openOrderDetails(orderId);
+    const win = window.open(waUrl, "_blank");
+    if (!win || win.closed || typeof win.closed === "undefined") {
+      openWhatsAppNotifyModal(orderId, null, templateKey);
+    } else {
+      renderLiveOrders();
+      if (activeModalOrderId === orderId) openOrderDetails(orderId);
+      showToastNotification(`WhatsApp Web aberto com mensagem de "${tmpl.label}"!`);
     }
-    showToastNotification(`WhatsApp Web aberto com mensagem de "${tmpl.label}"!`);
   }
 };
 

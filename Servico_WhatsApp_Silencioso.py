@@ -180,20 +180,7 @@ class WhatsAppBotManager:
         self.cloud_thread.start()
 
     def _clean_locks_and_zombies(self):
-        """Limpa preventivamente processos órfãos de Edge/Chrome e travas do perfil"""
-        try:
-            import subprocess
-            cmd = [
-                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
-                "Get-CimInstance Win32_Process | "
-                "Where-Object { ($_.Name -eq 'msedge.exe' -or $_.Name -eq 'chrome.exe') -and ($_.CommandLine -like '*SalgadosVIP*' -or $_.CommandLine -like '*WhatsAppProfile*') } | "
-                "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
-            ]
-            subprocess.run(cmd, capture_output=True, timeout=8)
-            time.sleep(1)
-        except Exception as err:
-            print(f"[*] Aviso limpeza processos: {err}")
-
+        """Limpa travas do perfil de forma ultrarrápida em Python puro"""
         import glob
         for pattern in ["lockfile*", "Singleton*"]:
             for f in glob.glob(os.path.join(PROFILE_DIR, pattern)):
@@ -208,7 +195,7 @@ class WhatsAppBotManager:
 
         opts = Options()
         opts.add_argument(f"--user-data-dir={PROFILE_DIR}")
-        opts.add_argument("--headless")
+        opts.add_argument("--headless=new")
         opts.add_argument("--disable-gpu")
         opts.add_argument("--no-sandbox")
         opts.add_argument("--disable-dev-shm-usage")
@@ -230,7 +217,7 @@ class WhatsAppBotManager:
                 from selenium.webdriver.chrome.options import Options as ChromeOptions
                 ch_opts = ChromeOptions()
                 ch_opts.add_argument(f"--user-data-dir={PROFILE_DIR}")
-                ch_opts.add_argument("--headless")
+                ch_opts.add_argument("--headless=new")
                 ch_opts.add_argument("--disable-gpu")
                 ch_opts.add_argument("--no-sandbox")
                 ch_opts.add_argument("--disable-dev-shm-usage")
@@ -293,12 +280,19 @@ class WhatsAppBotManager:
                         self.qr_code_data = None # Destrói QR code após pareamento seguro
                         continue
 
-                    # 2. Se não está logado, tenta extrair o QR Code do Canvas
+                    # 2. Se não está logado, auto-recarrega se expirado e extrai o QR Code do Canvas
                     qr_data = self.driver.execute_script("""
-                        const canvas = document.querySelector('canvas');
-                        if (canvas) {
-                            return canvas.toDataURL('image/png');
-                        }
+                        try {
+                            // Se houver botão de recarregar QR code expirado, clica nele automaticamente
+                            const reloadBtn = document.querySelector('button[aria-label*="Recarregar"], button[aria-label*="recarregar"], button[aria-label*="Reload"], div[role="button"][data-ref], span[data-icon="refresh"]');
+                            if (reloadBtn) {
+                                reloadBtn.click();
+                            }
+                            const canvas = document.querySelector('canvas');
+                            if (canvas) {
+                                return canvas.toDataURL('image/png');
+                            }
+                        } catch (e) {}
                         return null;
                     """)
 
@@ -470,6 +464,39 @@ class WhatsAppBotManager:
 
             time.sleep(1.5)
 
+    def disconnect_session(self):
+        """Desconecta a sessão do WhatsApp sem fechar o servidor HTTP"""
+        with self.lock:
+            print("[*] Desconectando sessão do WhatsApp Web a pedido do painel...")
+            self.connected = False
+            self.status = "starting"
+            self.qr_code_data = None
+            if self.driver:
+                try:
+                    self.driver.execute_script('''
+                        try {
+                            const menuBtn = document.querySelector('header span[data-icon="menu"], div[title="Menu"], button[aria-label="Menu"]');
+                            if (menuBtn) menuBtn.click();
+                            setTimeout(() => {
+                                const items = Array.from(document.querySelectorAll('div[role="button"], li'));
+                                const logoutBtn = items.find(el => el.innerText && el.innerText.toLowerCase().includes('desconectar'));
+                                if (logoutBtn) logoutBtn.click();
+                            }, 300);
+                        } catch(e) {}
+                    ''')
+                except Exception:
+                    pass
+                try:
+                    self.driver.delete_all_cookies()
+                except Exception:
+                    pass
+                try:
+                    self.driver.get("https://web.whatsapp.com")
+                except Exception:
+                    pass
+            print("[*] Sessão desconectada. Gerador de QR Code pronto.")
+            return {"success": True, "message": "Sessão desconectada. Novo QR Code será gerado."}
+
     def stop(self):
         self.running = False
         try:
@@ -522,8 +549,14 @@ class LocalApiHandler(BaseHTTPRequestHandler):
         # Localhost e loopback
         if re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$", origin_lower):
             return True, origin
+        # Rede local (LAN)
+        if re.match(r"^https?://(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$", origin_lower):
+            return True, origin
         # GitHub Pages
         if re.match(r"^https://[a-zA-Z0-9-]+\.github\.io$", origin_lower):
+            return True, origin
+        # Netlify e Vercel
+        if re.match(r"^https://[a-zA-Z0-9-]+\.netlify\.app$", origin_lower) or re.match(r"^https://[a-zA-Z0-9-]+\.vercel\.app$", origin_lower):
             return True, origin
 
         return False, origin
@@ -583,8 +616,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        # TODAS as rotas que contêm informações de status ou QR Code EXIGEM autenticação
-        if not self._is_authenticated():
+        # Rotas /status e /qr permitem acesso local loopback OU com token
+        is_local_client = self.client_address[0] in ("127.0.0.1", "::1", "localhost")
+        if not (is_local_client or self._is_authenticated()):
             self.send_response(401)
             self._send_cors(origin)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -640,8 +674,9 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        # TODAS as rotas POST exigem autenticação rigorosa
-        if not self._is_authenticated():
+        # Rotas POST permitem acesso local loopback OU com token autenticado
+        is_local_client = self.client_address[0] in ("127.0.0.1", "::1", "localhost")
+        if not (is_local_client or self._is_authenticated()):
             self.send_response(401)
             self._send_cors(origin)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -675,6 +710,17 @@ class LocalApiHandler(BaseHTTPRequestHandler):
             except Exception as e:
                 res = {"success": False, "error": f"Payload inválido: {e}"}
 
+            body = json.dumps(res).encode("utf-8")
+            self.send_response(200)
+            self._send_cors(origin)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        elif parsed.path in ("/disconnect", "/logout"):
+            print("[*] Recebida solicitação de desconexão da sessão via /disconnect...")
+            res = bot.disconnect_session()
             body = json.dumps(res).encode("utf-8")
             self.send_response(200)
             self._send_cors(origin)
