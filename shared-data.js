@@ -5,7 +5,19 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v39.0 (Bkp 39)";
+window.VIP_APP_VERSION = "v42.0 (Bkp 42)";
+
+// Helper universal de sanitização HTML contra XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+window.escapeHtml = escapeHtml;
 
 const STORAGE_KEYS = {
 
@@ -547,7 +559,7 @@ const VIPAuth = {
   },
 
   isLoggedIn() {
-    const raw = sessionStorage.getItem("vip_admin_session");
+    const raw = sessionStorage.getItem("vip_admin_session") || localStorage.getItem("vip_admin_session");
     if (!raw) return false;
     try {
       const sess = JSON.parse(raw);
@@ -556,23 +568,27 @@ const VIPAuth = {
       }
     } catch (e) {}
     sessionStorage.removeItem("vip_admin_session");
+    localStorage.removeItem("vip_admin_session");
     return false;
   },
 
   setSession(user) {
-    sessionStorage.setItem("vip_admin_session", JSON.stringify({
+    const sessionObj = {
       logged: true,
       username: user || "admin",
       createdAt: Date.now(),
-      expiresAt: Date.now() + (12 * 60 * 60 * 1000) // 12 horas de sessão ativa
-    }));
+      expiresAt: Date.now() + (24 * 60 * 60 * 1000) // 24 horas de sessão ativa
+    };
+    const str = JSON.stringify(sessionObj);
+    sessionStorage.setItem("vip_admin_session", str);
+    localStorage.setItem("vip_admin_session", str);
     // Limpeza de segurança para não deixar senhas ou auth em localStorage
     localStorage.removeItem(STORAGE_KEYS.AUTH);
   },
 
   getCurrentUser() {
     try {
-      const sess = sessionStorage.getItem("vip_admin_session");
+      const sess = sessionStorage.getItem("vip_admin_session") || localStorage.getItem("vip_admin_session");
       if (sess) {
         const parsed = JSON.parse(sess);
         return { name: parsed.username || "Administrador", username: parsed.username || "admin" };
@@ -584,6 +600,8 @@ const VIPAuth = {
   logout() {
     sessionStorage.removeItem("vip_admin_session");
     sessionStorage.removeItem("vip_admin_logged");
+    localStorage.removeItem("vip_admin_session");
+    localStorage.removeItem("vip_admin_logged");
   },
 
   async getCloudAuthRecord() {
@@ -1396,13 +1414,13 @@ const VIPDatabase = {
     const raw = localStorage.getItem(STORAGE_KEYS.ORDERS);
     let orders = [];
     if (!raw) {
-      orders = DEFAULT_ORDERS;
-      this.saveOrders(orders);
+      orders = [];
     } else {
       try {
         orders = JSON.parse(raw);
+        if (!Array.isArray(orders)) orders = [];
       } catch (e) {
-        orders = DEFAULT_ORDERS;
+        orders = [];
       }
     }
 
@@ -2680,27 +2698,45 @@ const VIPDatabase = {
       }
 
       try {
-        console.log("[Supabase] Conectando e sincronizando dados com a nuvem...");
+        console.log("[Supabase] Sincronização rápida em paralelo iniciando...");
 
-        // 1. Configurações da Loja e Delivery
-        const { data: settingsData } = await sb.from("store_settings").select("*");
-        if (settingsData && settingsData.length > 0) {
-          settingsData.forEach(row => {
+        const activeCatalogOrder = this.getCatalogOrder();
+
+        // Disparo simultâneo (paralelo) de todas as tabelas em um único ciclo assíncrono
+        const [
+          settingsRes,
+          kitsRes,
+          flavorsRes,
+          saucesRes,
+          catRes,
+          prodsRes,
+          combosRes,
+          ordersRes
+        ] = await Promise.allSettled([
+          sb.from("store_settings").select("*"),
+          sb.from("kits").select("*"),
+          sb.from("flavors").select("*"),
+          sb.from("sauces").select("*"),
+          sb.from("categories").select("*"),
+          sb.from("products").select("*"),
+          sb.from("combos").select("*"),
+          sb.from("orders").select("*").order("created_at", { ascending: false }).limit(200)
+        ]);
+
+        // 1. Configurações
+        if (settingsRes.status === "fulfilled" && settingsRes.value.data && settingsRes.value.data.length > 0) {
+          settingsRes.value.data.forEach(row => {
             if (row.id === "config" && row.value) localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(row.value));
             if (row.id === "delivery" && row.value) localStorage.setItem(STORAGE_KEYS.DELIVERY, JSON.stringify(row.value));
             if (row.id === "printer" && row.value) localStorage.setItem(STORAGE_KEYS.PRINTER, JSON.stringify(row.value));
             if (row.id === "catalog_order" && row.value) localStorage.setItem(STORAGE_KEYS.CATALOG_ORDER, JSON.stringify(row.value));
-            // Credenciais nunca são salvas localmente
             localStorage.removeItem(STORAGE_KEYS.AUTH);
           });
         }
 
-        const activeCatalogOrder = this.getCatalogOrder();
-
         // 2. Kits
-        const { data: kitsData } = await sb.from("kits").select("*");
-        if (kitsData && kitsData.length > 0) {
-          let mappedKits = kitsData.map(k => ({
+        if (kitsRes.status === "fulfilled" && kitsRes.value.data && kitsRes.value.data.length > 0) {
+          let mappedKits = kitsRes.value.data.map(k => ({
             ...k,
             passo_quantidade: k.passo_quantidade || 10,
             image: (k.image && k.image.trim()) ? k.image : (DEFAULT_KITS.find(d => d.id === k.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.kit)
@@ -2710,9 +2746,8 @@ const VIPDatabase = {
         }
 
         // 3. Sabores
-        const { data: flavorsData } = await sb.from("flavors").select("*");
-        if (flavorsData && flavorsData.length > 0) {
-          let mappedFlavors = flavorsData.map(f => ({
+        if (flavorsRes.status === "fulfilled" && flavorsRes.value.data && flavorsRes.value.data.length > 0) {
+          let mappedFlavors = flavorsRes.value.data.map(f => ({
             ...f,
             image: (f.image && f.image.trim()) ? f.image : (DEFAULT_FLAVORS.find(d => d.id === f.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.flavor)
           }));
@@ -2721,9 +2756,8 @@ const VIPDatabase = {
         }
 
         // 4. Molhos
-        const { data: saucesData } = await sb.from("sauces").select("*");
-        if (saucesData && saucesData.length > 0) {
-          let mappedSauces = saucesData.map(s => ({
+        if (saucesRes.status === "fulfilled" && saucesRes.value.data && saucesRes.value.data.length > 0) {
+          let mappedSauces = saucesRes.value.data.map(s => ({
             ...s,
             image: (s.image && s.image.trim()) ? s.image : (DEFAULT_SAUCES.find(d => d.id === s.id)?.image || (s.id === "sem-molho" ? "" : DEFAULT_IMAGE_PLACEHOLDERS.sauce))
           }));
@@ -2732,16 +2766,14 @@ const VIPDatabase = {
         }
 
         // 5. Categorias
-        const { data: catData } = await sb.from("categories").select("*");
-        if (catData && catData.length > 0) {
-          const orderedCats = applyCatalogOrder(catData, activeCatalogOrder.categories);
+        if (catRes.status === "fulfilled" && catRes.value.data && catRes.value.data.length > 0) {
+          const orderedCats = applyCatalogOrder(catRes.value.data, activeCatalogOrder.categories);
           try { localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(orderedCats)); } catch(e) {}
         }
 
         // 6. Produtos
-        const { data: prodsData } = await sb.from("products").select("*");
-        if (prodsData && prodsData.length > 0) {
-          let mappedProds = prodsData.map(p => ({
+        if (prodsRes.status === "fulfilled" && prodsRes.value.data && prodsRes.value.data.length > 0) {
+          let mappedProds = prodsRes.value.data.map(p => ({
             ...p,
             categoryId: p.category_id || p.categoryId,
             image: (p.image && p.image.trim()) ? p.image : (DEFAULT_PRODUCTS.find(d => d.id === p.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.product)
@@ -2751,9 +2783,8 @@ const VIPDatabase = {
         }
 
         // 7. Combos
-        const { data: combosData } = await sb.from("combos").select("*");
-        if (combosData && combosData.length > 0) {
-          let mappedCombos = combosData.map(c => ({
+        if (combosRes.status === "fulfilled" && combosRes.value.data && combosRes.value.data.length > 0) {
+          let mappedCombos = combosRes.value.data.map(c => ({
             ...c,
             regularPrice: parseFloat(c.regular_price || c.regularPrice || 0),
             price: parseFloat(c.price || 0),
@@ -2764,10 +2795,9 @@ const VIPDatabase = {
           try { localStorage.setItem(STORAGE_KEYS.COMBOS, JSON.stringify(mappedCombos)); } catch(e) {}
         }
 
-        // 8. Pedidos
-        const { data: ordersData } = await sb.from("orders").select("*").order("created_at", { ascending: false });
-        if (ordersData && ordersData.length > 0) {
-          const mappedOrders = ordersData.map(o => ({
+        // 8. Pedidos (Mesclagem inteligente com persistência local)
+        if (ordersRes.status === "fulfilled" && ordersRes.value.data && ordersRes.value.data.length > 0) {
+          const mappedOrders = ordersRes.value.data.map(o => ({
             ...o,
             id: o.id || o.order_id,
             orderId: o.order_id || o.id,
@@ -2779,24 +2809,30 @@ const VIPDatabase = {
             paymentMethod: o.payment_method,
             cashChangeFor: o.cash_change_for,
             pixCode: o.pix_code || o.pixCode || null,
+            deliveryMan: o.delivery_man || o.deliveryMan || null,
             timingType: o.timing_type,
             scheduledDate: o.scheduled_date,
             scheduledTime: o.scheduled_time,
             scheduledDateTimeFormatted: o.scheduled_date_time_formatted,
             printedAt: o.printed_at ? parseInt(o.printed_at) : null
           }));
-          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(mappedOrders));
+
+          const localOrders = this.getOrders();
+          const localMap = new Map(localOrders.map(o => [o.id, o]));
+          mappedOrders.forEach(mo => localMap.set(mo.id, mo));
+          const mergedList = Array.from(localMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(mergedList));
         }
 
         // 9. Registrar Canal Realtime no Supabase
         this.subscribeRealtimeOrders();
 
         window.dispatchEvent(new CustomEvent("vip_supabase_synced", { detail: { success: true } }));
-        console.log("[Supabase] Sincronização inicial concluída com sucesso!");
+        console.log("[Supabase] Sincronização inicial paralela concluída com sucesso!");
         return true;
       } catch (err) {
         console.warn("[Supabase] Erro ao sincronizar dados com Supabase:", err);
-        window._vipSupabaseInitPromise = null; // permite tentar novamente se falhou
+        window._vipSupabaseInitPromise = null;
         return false;
       }
     })();
@@ -3011,12 +3047,8 @@ const VIPDatabase = {
           const mergedList = Array.from(localMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
           localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(mergedList));
 
-          if (newOrdersFound.length > 0) {
-            newOrdersFound.forEach(newOrd => {
-              window.dispatchEvent(new CustomEvent("vip_order_received", { detail: newOrd }));
-            });
-          }
-          window.dispatchEvent(new CustomEvent("vip_orders_updated", { detail: { event: "SYNC" } }));
+          // Notificação em lote única: evita disparos individuais repetitivos para pedidos do histórico
+          window.dispatchEvent(new CustomEvent("vip_orders_updated", { detail: { event: "SYNC", newCount: newOrdersFound.length } }));
         }
       }
       return this.getOrders();

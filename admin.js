@@ -9,6 +9,18 @@ function formatBRL(val) {
   return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// Sanitização HTML segura universal contra XSS e quebra de template strings
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+window.escapeHtml = escapeHtml;
+
 // ==========================================
 // 1. AUTENTICAÇÃO E SESSÃO
 // ==========================================
@@ -487,19 +499,37 @@ let orderSearchTerm = "";
 let activeModalOrderId = null;
 const knownOrderIds = new Set();
 let liveOrdersInterval = null;
+let _renderLiveOrdersScheduled = false;
+
+// Renderização otimizada com debounce em lote para evitar travamento do navegador
+function debouncedRenderLiveOrders() {
+  if (_renderLiveOrdersScheduled) return;
+  _renderLiveOrdersScheduled = true;
+  requestAnimationFrame(() => {
+    _renderLiveOrdersScheduled = false;
+    renderLiveOrders();
+  });
+}
+window.debouncedRenderLiveOrders = debouncedRenderLiveOrders;
 
 // Inicializa o monitoramento contínuo de novos pedidos (executado uma única vez)
 function initOrdersWatcher() {
   if (window._adminWatcherInitialized) return;
   window._adminWatcherInitialized = true;
 
+  // Marca os pedidos já existentes localmente para evitar falsos alarmes de impressão
   const orders = VIPDatabase.getOrders();
   orders.forEach(o => knownOrderIds.add(o.id));
 
-  // Inicializa o Supabase (Nuvem em Tempo Real)
+  // Inicializa o Supabase (Nuvem em Tempo Real com carregamento paralelo rápido)
   if (typeof VIPDatabase.initSupabase === "function") {
     VIPDatabase.initSupabase().then(success => {
+      window._vipInitialOrdersLoaded = true;
+      // Registra todos os pedidos carregados da nuvem como já conhecidos antes de checar alertas
+      const curOrders = VIPDatabase.getOrders();
+      curOrders.forEach(o => knownOrderIds.add(o.id));
       updateSupabasePillStatus(success ? "SUBSCRIBED" : "OFFLINE");
+      debouncedRenderLiveOrders();
     });
   }
 
@@ -508,18 +538,31 @@ function initOrdersWatcher() {
     checkPrintAgentStatus();
   }
 
+  // Polling inteligente como rede de segurança:
+  // Se o WebSocket Realtime estiver conectado, consulta em intervalo suave (30s). Se desconectado, a cada 10s.
   if (!liveOrdersInterval) {
     liveOrdersInterval = setInterval(async () => {
-      // 1. Sincroniza ativamente com a Nuvem Supabase (garantia total de recebimento mesmo com oscilações no Realtime)
-      if (typeof VIPDatabase.syncOrdersFromSupabase === "function") {
-        try {
-          await VIPDatabase.syncOrdersFromSupabase();
-        } catch(e) {}
+      const isRealtimeActive = window._vipRealtimeSubscribed === true;
+      const now = Date.now();
+      const pollFreq = isRealtimeActive ? 30000 : 10000;
+
+      if (!window._lastSupabasePollTime || (now - window._lastSupabasePollTime >= pollFreq)) {
+        window._lastSupabasePollTime = now;
+        if (typeof VIPDatabase.syncOrdersFromSupabase === "function") {
+          try {
+            await VIPDatabase.syncOrdersFromSupabase();
+          } catch(e) {}
+        }
       }
-      // 2. Verifica novos pedidos e atualiza timers
       checkIncomingLiveOrders();
+    }, 4000);
+  }
+
+  // Atualizador leve de cronômetros a cada 15 segundos
+  if (!window._liveTimersInterval) {
+    window._liveTimersInterval = setInterval(() => {
       updateLiveElapsedTimers();
-    }, 3500);
+    }, 15000);
   }
 
   // Sincronização entre abas e eventos do Supabase Realtime (registrados apenas uma vez)
@@ -534,7 +577,7 @@ function initOrdersWatcher() {
           if (ev.data && ev.data.type === "NEW_ORDER") {
             console.log("[BroadcastChannel] Pedido recebido instantaneamente via barramento local:", ev.data.order?.id);
             checkIncomingLiveOrders();
-            renderLiveOrders();
+            debouncedRenderLiveOrders();
           }
         };
       } catch(e) {}
@@ -545,21 +588,26 @@ function initOrdersWatcher() {
 
     window.addEventListener("vip_order_received", (e) => {
       checkIncomingLiveOrders();
-      renderLiveOrders();
+      debouncedRenderLiveOrders();
     });
 
     window.addEventListener("vip_orders_updated", () => {
-      checkIncomingLiveOrders();
-      renderLiveOrders();
+      const curOrders = VIPDatabase.getOrders();
+      curOrders.forEach(o => knownOrderIds.add(o.id));
+      debouncedRenderLiveOrders();
     });
 
     window.addEventListener("vip_supabase_status", (e) => {
-      updateSupabasePillStatus(e.detail?.status);
+      const st = e.detail?.status;
+      window._vipRealtimeSubscribed = (st === "SUBSCRIBED");
+      updateSupabasePillStatus(st);
     });
 
     window.addEventListener("vip_supabase_synced", () => {
-      // Atualiza tabelas e listas da nuvem sem reiniciar watchers nem sobrescrever campos em digitação
-      renderLiveOrders();
+      window._vipInitialOrdersLoaded = true;
+      const curOrders = VIPDatabase.getOrders();
+      curOrders.forEach(o => knownOrderIds.add(o.id));
+      debouncedRenderLiveOrders();
       renderFlavorsTable();
       renderKitsTable();
       renderCombosTable();
@@ -846,24 +894,23 @@ window.onOrderSearchChange = function() {
 // ==============================================================================
 // DETECÇÃO DE BEBIDAS E DESTAQUES DE COBRANÇA PARA MOTOBOY
 // ==============================================================================
-function isOrderDrinkItem(item) {
+function isOrderDrinkItem(item, catsCache, prodsCache) {
   if (!item) return false;
   const name = item.name || "";
   const catId = item.categoryId;
 
+  const cats = catsCache || (typeof VIPDatabase !== "undefined" && VIPDatabase.getCategories ? VIPDatabase.getCategories() : []);
   if (catId) {
-    const cats = typeof VIPDatabase !== "undefined" && VIPDatabase.getCategories ? VIPDatabase.getCategories() : [];
     const cat = cats.find(c => c.id === catId);
     if (cat && /bebida|refrigerante|suco|cerveja|água|agua/i.test(cat.name)) {
       return true;
     }
   }
 
+  const prods = prodsCache || (typeof VIPDatabase !== "undefined" && VIPDatabase.getProducts ? VIPDatabase.getProducts() : []);
   if (item.productId) {
-    const prods = typeof VIPDatabase !== "undefined" && VIPDatabase.getProducts ? VIPDatabase.getProducts() : [];
     const p = prods.find(prod => prod.id === item.productId);
     if (p && p.categoryId) {
-      const cats = typeof VIPDatabase !== "undefined" && VIPDatabase.getCategories ? VIPDatabase.getCategories() : [];
       const cat = cats.find(c => c.id === p.categoryId);
       if (cat && /bebida|refrigerante|suco|cerveja|água|agua/i.test(cat.name)) {
         return true;
@@ -875,13 +922,13 @@ function isOrderDrinkItem(item) {
   return drinkRegex.test(name);
 }
 
-function extractOrderDrinks(order) {
+function extractOrderDrinks(order, catsCache, prodsCache) {
   const drinks = [];
   if (!order || !Array.isArray(order.items)) return drinks;
 
   order.items.forEach(item => {
     if (item.type === "product") {
-      if (isOrderDrinkItem(item)) {
+      if (isOrderDrinkItem(item, catsCache, prodsCache)) {
         drinks.push({
           name: item.name,
           quantity: item.quantity || 1,
@@ -890,7 +937,7 @@ function extractOrderDrinks(order) {
       }
     } else if (item.type === "combo") {
       (item.items || []).forEach(ci => {
-        if (ci.type === "product" || isOrderDrinkItem(ci)) {
+        if (ci.type === "product" || isOrderDrinkItem(ci, catsCache, prodsCache)) {
           drinks.push({
             name: ci.name,
             quantity: ci.quantity || 1,
@@ -1046,13 +1093,24 @@ window.toggleOnlyDelayedFilter = function() {
   if (pillDelay) {
     pillDelay.classList.toggle("active", onlyDelayedOrdersFilter);
   }
+  if (onlyDelayedOrdersFilter) {
+    showToastNotification("Filtro ativado: exibindo apenas pedidos em atraso.");
+  } else {
+    showToastNotification("Filtro desativado: exibindo todos os pedidos.");
+  }
   renderLiveOrders();
 };
 
 window.scrollKanbanTo = function(stage) {
   const col = document.querySelector(`.kanban-col[data-stage="${stage}"]`);
   if (col) {
-    col.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    const board = document.getElementById("orders-kanban-board");
+    if (board && board.scrollWidth > board.clientWidth) {
+      const colLeft = col.offsetLeft - board.offsetLeft;
+      board.scrollTo({ left: Math.max(0, colLeft - 16), behavior: "smooth" });
+    } else {
+      col.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    }
     col.classList.add("highlight-col");
     setTimeout(() => col.classList.remove("highlight-col"), 1200);
   }
@@ -1061,7 +1119,7 @@ window.scrollKanbanTo = function(stage) {
 window.revertOrderStatus = function(orderId, event) {
   if (event) event.stopPropagation();
   const orders = VIPDatabase.getOrders();
-  const order = orders.find(o => o.id === orderId);
+  const order = orders.find(o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId));
   if (!order) return;
   let prevStatus = "pronto";
   if (order.status === "concluido") prevStatus = "pronto";
@@ -1123,6 +1181,8 @@ function renderLiveOrders() {
   if (!colNovo || !colPrep || !colReady || !colDone) return;
 
   const orders = VIPDatabase.getOrders();
+  const catsCache = typeof VIPDatabase !== "undefined" && VIPDatabase.getCategories ? VIPDatabase.getCategories() : [];
+  const prodsCache = typeof VIPDatabase !== "undefined" && VIPDatabase.getProducts ? VIPDatabase.getProducts() : [];
 
   // Data de hoje formatada
   const todayStr = new Date().toLocaleDateString("pt-BR");
@@ -1242,7 +1302,7 @@ function renderLiveOrders() {
   let hasInDone = false;
 
   sortedOrders.forEach(order => {
-    const cardEl = renderKanbanCard(order);
+    const cardEl = renderKanbanCard(order, catsCache, prodsCache);
     if (order.status === "novo") {
       colNovo.appendChild(cardEl);
       hasInNovo = true;
@@ -1272,13 +1332,21 @@ function renderLiveOrders() {
     colDone.innerHTML = `<div class="kanban-col-empty"><i class="fa-solid fa-circle-check"></i><span>Nenhum pedido finalizado hoje</span></div>`;
   }
 
-  // Exibir ou ocultar banner de lista vazia geral
+  // Exibir ou ocultar banner de lista vazia geral com estado de carregamento inteligente
   if (emptyState) {
     if (activeList.length === 0) {
       emptyState.style.display = "block";
       const titleEl = document.getElementById("empty-state-title");
       const descEl = document.getElementById("empty-state-desc");
-      if (currentOrdersDateFilter === "hoje") {
+      const isConnecting = !window._vipInitialOrdersLoaded && Boolean(window._vipSupabaseInitPromise);
+
+      if (isConnecting && orders.length === 0) {
+        if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="color: #d97706;"></i> Conectando à nuvem...';
+        if (descEl) descEl.textContent = "Sincronizando banco de dados Supabase em tempo real.";
+      } else if (onlyDelayedOrdersFilter) {
+        if (titleEl) titleEl.textContent = "Nenhum pedido em atraso no momento";
+        if (descEl) descEl.innerHTML = `Todos os pedidos estão dentro do prazo previsto.<br><button type="button" class="btn-outline-admin" onclick="toggleOnlyDelayedFilter()" style="margin-top:8px; font-size:0.8rem; padding:4px 10px; cursor:pointer;"><i class="fa-solid fa-eye"></i> Ver todos os pedidos</button>`;
+      } else if (currentOrdersDateFilter === "hoje") {
         if (titleEl) titleEl.textContent = `Nenhum pedido registrado hoje (${todayStr})`;
         if (descEl) descEl.textContent = `Assim que novos pedidos forem realizados, eles aparecerão na coluna "Recebidos" automaticamente.`;
       } else {
@@ -1292,7 +1360,7 @@ function renderLiveOrders() {
 }
 
 // Criação do Elemento Card para o Kanban
-function renderKanbanCard(order) {
+function renderKanbanCard(order, catsCache, prodsCache) {
   const timing = getOrderTiming(order);
   const card = document.createElement("div");
   card.className = `kanban-card ${timing.isDelayed ? "is-delayed" : ""}`;
@@ -1302,14 +1370,23 @@ function renderKanbanCard(order) {
   card.setAttribute("ondragstart", `onKanbanDragStart(event, '${order.id}')`);
   card.setAttribute("ondragend", "onKanbanDragEnd(event)");
 
+  // Permite clicar em qualquer área livre do card para visualizar os detalhes completos do pedido
+  card.style.cursor = "pointer";
+  card.onclick = function(e) {
+    if (e.target.closest("button") || e.target.closest("a") || e.target.closest(".kanban-motoboy-badge")) {
+      return;
+    }
+    openOrderDetails(order.id, e);
+  };
+
   // Badges de Atendimento (Entrega vs Retirada)
   const isDelivery = order.fulfillment === "Entrega";
   const fulfillmentBadge = isDelivery
     ? `<span class="kanban-tag-delivery" title="Entrega em domicílio"><i class="fa-solid fa-motorcycle"></i> Entrega${order.deliveryDistanceKm ? ` (${order.deliveryDistanceKm.toFixed(1)}km)` : ''}</span>`
     : `<span class="kanban-tag-pickup" title="Retirada no balcão"><i class="fa-solid fa-store"></i> Balcão</span>`;
 
-  // Detecção de Bebidas
-  const orderDrinks = extractOrderDrinks(order);
+  // Detecção de Bebidas (com cache em memória otimizado)
+  const orderDrinks = extractOrderDrinks(order, catsCache, prodsCache);
   const totalDrinksCount = orderDrinks.reduce((acc, d) => acc + (d.quantity || 1), 0);
   const drinkTag = totalDrinksCount > 0
     ? `<span class="kanban-tag-drink" title="Contém ${totalDrinksCount} bebida(s) gelada(s)!"><i class="fa-solid fa-bottle-water"></i> Bebida (${totalDrinksCount})</span>`
@@ -1432,7 +1509,7 @@ function renderKanbanCard(order) {
       </div>
     </div>
 
-    <div class="kanban-card-items" onclick="openOrderDetails('${order.id}')" title="Clique para ver os detalhes completos do pedido">
+    <div class="kanban-card-items" onclick="openOrderDetails('${order.id}', event)" title="Clique para ver os detalhes completos do pedido">
       ${itemsSummaryHtml || '<span style="color:#94a3b8; font-style:italic;">Sem itens listados</span>'}
     </div>
 
@@ -1448,7 +1525,7 @@ function renderKanbanCard(order) {
         <button type="button" class="btn-kanban-icon btn-wa-icon ${order.lastWhatsAppSent ? 'has-sent' : ''}" onclick="openWhatsAppNotifyModal('${order.id}', event)" title="Notificar cliente via WhatsApp">
           <i class="fa-brands fa-whatsapp"></i>
         </button>
-        <button type="button" class="btn-kanban-icon" onclick="openOrderDetails('${order.id}')" title="Ver Detalhes do Pedido">
+        <button type="button" class="btn-kanban-icon" onclick="openOrderDetails('${order.id}', event); event.stopPropagation();" title="Ver Detalhes do Pedido">
           <i class="fa-solid fa-eye"></i>
         </button>
       </div>
@@ -2365,11 +2442,19 @@ window.advanceOrderStatus = async function(orderId, event) {
 // ==============================================================================
 // MODAL DE DETALHES COMPLETOS DO PEDIDO
 // ==============================================================================
-window.openOrderDetails = function(orderId) {
+window.openOrderDetails = function(orderId, event) {
+  if (event && typeof event.stopPropagation === "function") {
+    event.stopPropagation();
+  }
   activeModalOrderId = orderId;
   const orders = VIPDatabase.getOrders();
-  const order = orders.find(o => o.id === orderId);
-  if (!order) return;
+  const order = orders.find(o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId));
+  if (!order) {
+    console.warn("[openOrderDetails] Pedido não encontrado no banco:", orderId);
+    return;
+  }
+
+  try {
 
   const timing = getOrderTiming(order);
 
@@ -2697,8 +2782,18 @@ window.openOrderDetails = function(orderId) {
   btnPrint.onclick = () => printOrderReceipt(order.id, false);
 
   // Abrir Modal
-  document.getElementById("modal-order-backdrop").classList.add("active");
-  document.getElementById("modal-order").classList.add("active");
+    const backdropEl = document.getElementById("modal-order-backdrop");
+    const modalEl = document.getElementById("modal-order");
+    if (backdropEl) backdropEl.classList.add("active");
+    if (modalEl) modalEl.classList.add("active");
+  } catch (err) {
+    console.error("[openOrderDetails] Erro ao carregar detalhes do pedido:", err);
+    if (typeof showToastNotification === "function") {
+      showToastNotification("Erro ao carregar detalhes do pedido: " + (err.message || err));
+    } else {
+      alert("Erro ao abrir detalhes do pedido: " + (err.message || err));
+    }
+  }
 };
 
 window.setOrderStatus = async function(orderId, newStatus) {
