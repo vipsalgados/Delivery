@@ -3265,7 +3265,7 @@ tr.table-row-draggable.drag-over-below {
    FORMATO DE IMPRESSÃO TÉRMICA (@media print)
    ============================================================================== */
 @page {
-  size: 80mm auto;
+  size: auto;
   margin: 0mm !important;
 }
 
@@ -3276,72 +3276,69 @@ tr.table-row-draggable.drag-over-below {
 @media print {
   html, body {
     width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
-    text-align: center !important;
+    overflow: visible !important;
   }
 
-  /* Ocultar toda a interface administrativa na impressão */
-  body * {
-    visibility: hidden;
-  }
-
-  .login-wrapper,
-  .admin-topbar,
-  .admin-nav-tabs,
-  .admin-main,
-  .adm-modal,
-  .adm-modal-backdrop,
-  .toast-container,
-  #toast-container {
+  /* Remove COMPLETAMENTE todos os elementos da tela para NUNCA gerar páginas em branco fantasmas */
+  body > *:not(#thermal-receipt-area) {
     display: none !important;
   }
 
-  /* Exibir exclusivamente a área do cupom térmico */
-  .thermal-receipt-area,
-  .thermal-receipt-area * {
-    visibility: visible;
-  }
-
+  /* Exibe exclusivamente a área do cupom térmico ocupando o topo absoluto da impressão */
+  #thermal-receipt-area,
   .thermal-receipt-area {
     display: block !important;
-    position: relative !important;
-    left: auto !important;
-    right: auto !important;
-    top: 0 !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    padding: 0 2mm !important; /* Margem lateral 2mm para máxima economia de bobina */
+    visibility: visible !important;
+    position: static !important;
+    margin: 0 auto !important;
+    padding: 0 1.5mm !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
     color: #000000 !important;
-    font-family: 'Consolas', 'Courier New', Courier, monospace;
-    font-size: 11pt;
-    line-height: 1.25;
     text-align: left !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
 
-  /* Largura 80mm: 76mm com margens 2mm & 2mm para máxima economia de bobina evitando desperdício */
+  .thermal-receipt-area,
+  .thermal-receipt-area * {
+    visibility: visible !important;
+  }
+
+  /* Largura 80mm: 76mm de conteúdo útil */
   .thermal-receipt-area.paper-80mm {
     width: 76mm !important;
     max-width: 76mm !important;
     min-width: 76mm !important;
-    padding: 0 2mm !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    margin: 0 auto !important;
+    padding: 0 1.5mm !important;
   }
 
-  /* Largura 58mm: definida em 50mm */
+  /* Largura 58mm: 50mm de conteúdo útil */
   .thermal-receipt-area.paper-58mm {
     width: 50mm !important;
     max-width: 50mm !important;
-    padding: 0 2mm !important;
-    font-size: 9.5pt;
-    margin-left: auto !important;
-    margin-right: auto !important;
+    min-width: 50mm !important;
+    margin: 0 auto !important;
+    padding: 0 1mm !important;
+    font-size: 9pt !important;
+  }
+
+  .receipt-copy {
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+    margin-bottom: 0 !important;
+    padding-bottom: 2mm !important;
   }
 }
 

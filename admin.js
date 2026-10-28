@@ -2963,17 +2963,15 @@ window.closeOrderModal = function() {
 // ==============================================================================
 function buildOrderTextReceipt(order, cfg, printerCfg) {
   const paperWidth = parseInt(printerCfg.textColumns) || (printerCfg.paperWidth === "58mm" ? 30 : 40);
-  const marginMm = parseInt(printerCfg.marginSideMm) !== undefined ? parseInt(printerCfg.marginSideMm) : 4;
-  const leftPadSpaces = Math.max(1, Math.min(4, Math.floor(marginMm / 1.5)));
-  const leftPad = " ".repeat(leftPadSpaces);
+  const leftPad = " ";
 
-  const divider = leftPad + "=".repeat(paperWidth);
-  const thinDivider = leftPad + "-".repeat(paperWidth);
+  const divider = leftPad + "=".repeat(paperWidth - 1);
+  const thinDivider = leftPad + "-".repeat(paperWidth - 1);
 
   function center(text) {
     if (!text) return "";
     const str = String(text);
-    if (str.length >= paperWidth) return leftPad + str.substring(0, paperWidth);
+    if (str.length >= paperWidth) return leftPad + str.substring(0, paperWidth - 1);
     const pad = Math.floor((paperWidth - str.length) / 2);
     return leftPad + " ".repeat(pad) + str;
   }
@@ -2981,8 +2979,8 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
   function line(left, right) {
     const l = String(left || "");
     const r = String(right || "");
-    const space = paperWidth - l.length - r.length;
-    if (space <= 0) return leftPad + (l + " " + r).substring(0, paperWidth);
+    const space = paperWidth - l.length - r.length - 1;
+    if (space <= 0) return leftPad + (l + " " + r).substring(0, paperWidth - 1);
     return leftPad + l + " ".repeat(space) + r;
   }
 
@@ -2991,144 +2989,93 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
   }
 
   const orderDateStr = new Date(order.createdAt).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
+    day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"
   });
 
   const lines = [];
   lines.push(divider);
-  lines.push(center(cfg.name ? cfg.name.toUpperCase() : "SALGADOS VIP"));
-  lines.push(center("DELIVERY & BALCAO - NOVA IGUACU"));
-  if (cfg.phone) {
-    lines.push(center("WhatsApp: " + cfg.phone));
-  }
+  lines.push(center(cfg.name ? cfg.name.toUpperCase() : "SALGADOS VIP DELIVERY"));
+  lines.push(center("WhatsApp: " + (cfg.phone || "(21) 98675-8102")));
   lines.push(divider);
-  lines.push(center(`PEDIDO #${order.id || order.orderId}`));
-  lines.push(line("Data/Hora:", orderDateStr));
 
-  const isScheduled = order.timingType === "agendado" && order.scheduledDate && order.scheduledTime;
-  if (isScheduled) {
-    lines.push(divider);
-    lines.push(center("[ PEDIDO AGENDADO ]"));
-    lines.push(line("Data Entrega:", order.scheduledDate));
-    lines.push(line("Horario Alvo:", order.scheduledTime));
-    lines.push(divider);
-  } else {
-    lines.push(line("Tipo:", "ENTREGA IMEDIATA"));
-  }
+  lines.push(line(`PEDIDO #${order.id || order.orderId}`, orderDateStr));
 
-  lines.push(thinDivider);
-  lines.push(center("[ DADOS DO CLIENTE ]"));
-  lines.push(line("Cliente:", (order.customer?.name || "Cliente").substring(0, Math.max(12, paperWidth - 10))));
-  lines.push(line("Telefone:", order.customer?.phone || "Nao informado"));
-  lines.push(line("Modalidade:", order.customer?.fulfillment === "Retirada" ? "RETIRADA NO BALCAO" : "ENTREGA EM DOMICILIO"));
+  const custName = (order.customer?.name || "Cliente").substring(0, 18);
+  const custPhone = order.customer?.phone || "";
+  lines.push(line("CLIENTE:", `${custName} ${custPhone}`.trim()));
 
-  if (order.customer?.fulfillment !== "Retirada") {
-    lines.push(thinDivider);
-    lines.push(center("[ ENDERECO DE ENTREGA ]"));
-    lines.push(rawLine(order.customer?.address || ""));
+  const isDelivery = order.fulfillment === "Entrega" || order.customer?.fulfillment !== "Retirada";
+  if (isDelivery) {
+    const addr = order.customer?.address || "Endereco nao informado";
+    lines.push(rawLine(`ENTREGA: ${addr.substring(0, paperWidth - 10)}`));
     if (order.customer?.reference) {
-      lines.push(rawLine("Ref: " + order.customer.reference));
+      lines.push(rawLine(`REF: ${order.customer.reference.substring(0, paperWidth - 6)}`));
     }
-    if (order.customer?.cep) {
-      lines.push(rawLine("CEP: " + order.customer.cep));
-    }
+  } else {
+    lines.push(line("MODALIDADE:", "RETIRADA NO BALCAO"));
   }
 
-  const orderDrinks = extractOrderDrinks(order);
-  const hasDrinks = orderDrinks.length > 0;
-  if (printerCfg.highlightDrinks !== false && hasDrinks) {
-    lines.push(divider);
-    lines.push(center("*** BEBIDA GELADA NO PEDIDO ***"));
-    lines.push(divider);
+  if (order.timingType === "agendado" && order.scheduledDate && order.scheduledTime) {
+    lines.push(line("AGENDADO:", `${order.scheduledDate} ${order.scheduledTime}`));
   }
 
   lines.push(thinDivider);
-  lines.push(center("[ ITENS DO PEDIDO ]"));
+  lines.push(center("ITENS DO PEDIDO"));
 
   (order.items || []).forEach(item => {
     if (item.type === "kit") {
-      lines.push(line(`1x ${item.kitName || "Kit de Salgados"}`, formatBRL(item.finalPrice || 0)));
+      lines.push(line(`1x ${item.kitName || "Kit Salgados"}`, formatBRL(item.finalPrice || 0)));
       (item.flavors || []).forEach(f => {
-        lines.push(rawLine(`   - ${f.quantity}x ${f.name}`));
+        lines.push(rawLine(`  • ${f.quantity}x ${f.name}`));
       });
       if (item.sauces && item.sauces.length > 0) {
         const sText = item.sauces.map(s => `${s.quantity}x ${s.name}`).join(", ");
-        lines.push(rawLine(`   * Molhos: ${sText}`));
+        lines.push(rawLine(`  • Molho: ${sText}`));
       }
     } else if (item.type === "combo") {
-      lines.push(line(`1x ${item.name || "Combo Promocional"}`, formatBRL(item.finalPrice || 0)));
+      lines.push(line(`1x ${item.name || "Combo"}`, formatBRL(item.finalPrice || 0)));
       (item.items || []).forEach(ci => {
-        const isDrink = isOrderDrinkItem(ci);
-        if (isDrink && printerCfg.highlightDrinks !== false) {
-          lines.push(rawLine(`   - [BEBIDA GELADA] ${ci.quantity}x ${ci.name}`));
-        } else {
-          lines.push(rawLine(`   - ${ci.quantity}x ${ci.name}`));
-        }
+        lines.push(rawLine(`  • ${ci.quantity}x ${ci.name}`));
       });
     } else {
       const isDrink = isOrderDrinkItem(item);
-      const prefix = (isDrink && printerCfg.highlightDrinks !== false) ? "[BEBIDA] " : "";
+      const prefix = isDrink ? "[GELADA] " : "";
       lines.push(line(`${item.quantity || 1}x ${prefix}${item.name}`, formatBRL((item.price || 0) * (item.quantity || 1))));
     }
   });
 
-  if (printerCfg.highlightDrinks !== false && hasDrinks) {
-    lines.push(thinDivider);
-    lines.push(center("*** CONFERENCIA DE GELADEIRA ***"));
-    orderDrinks.forEach(d => {
-      lines.push(rawLine(` [ ] PEGAR: ${d.quantity}x ${d.name}`));
-    });
-  }
-
   if (order.customer?.notes) {
-    lines.push(thinDivider);
-    lines.push(rawLine("OBSERVACOES:"));
-    lines.push(rawLine(order.customer.notes));
+    lines.push(rawLine(`OBS: ${order.customer.notes.substring(0, paperWidth - 6)}`));
   }
 
   lines.push(thinDivider);
-  lines.push(line("Subtotal:", formatBRL(order.subtotalAmount || order.totalAmount || 0)));
   if (order.deliveryFee && order.deliveryFee > 0) {
-    const kmStr = order.deliveryDistanceKm ? ` (${order.deliveryDistanceKm.toFixed(1)} km)` : "";
-    lines.push(line(`Taxa Entrega${kmStr}:`, formatBRL(order.deliveryFee)));
+    lines.push(line("Subtotal:", formatBRL(order.subtotalAmount || order.totalAmount || 0)));
+    lines.push(line("Taxa Entrega:", formatBRL(order.deliveryFee)));
   }
-  lines.push(divider);
   lines.push(line("TOTAL DO PEDIDO:", formatBRL(order.totalAmount || 0)));
-  lines.push(divider);
 
   const payMethod = order.paymentMethod || "A Definir";
-  lines.push(line("Forma Pagamento:", payMethod));
+  lines.push(line("PAGAMENTO:", payMethod));
 
-  if (printerCfg.showMotoboyBox !== false && order.fulfillment === "Entrega") {
-    lines.push(divider);
-    lines.push(center("*** INSTRUCOES DO MOTOBOY ***"));
-    lines.push(line("TOTAL A COBRAR:", formatBRL(order.totalAmount || 0)));
-    if (order.motoboyChangeNeeded) {
-      lines.push(line("Troco para:", formatBRL(order.changeFor || 0)));
-      lines.push(line("LEVAR DE TROCO:", formatBRL(order.changeAmount || 0)));
-    }
-    lines.push(divider);
+  if (order.changeFor) {
+    lines.push(line("Troco para:", formatBRL(order.changeFor)));
   }
 
-  const isPix = order.paymentMethod === "PIX" || String(order.paymentMethod || "").toUpperCase().includes("PIX");
-  if (printerCfg.printPixDetails !== false && isPix) {
-    lines.push(thinDivider);
-    lines.push(center("[ PAGAMENTO VIA PIX ]"));
-    lines.push(center("Chave PIX: " + (cfg.pixKey || "(21) 98675-8102")));
-    lines.push(center("Favorecido: " + (cfg.name || "Salgados VIP")));
-    lines.push(center("Enviar comprovante pelo WhatsApp"));
-  }
-
-  lines.push(thinDivider);
+  lines.push(divider);
   lines.push(center("Obrigado pela preferencia!"));
-  lines.push(center(cfg.name || "Salgados VIP"));
-  lines.push(thinDivider);
-  lines.push("\r\n\r\n\r\n\r\n"); // avanço para guilhotina
+  lines.push(center(cfg.name || "Salgados VIP - Nova Iguacu"));
+  lines.push(divider);
+  lines.push("
 
-  return lines.join("\r\n");
+");
+
+  return lines.join("
+
+");
 }
 
-window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
+window.printOrderReceipt = async function(orderId, isAutoPrint = false, event = null) {
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
@@ -3141,12 +3088,12 @@ window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
   const cfg = VIPDatabase.getConfig();
   const printerCfg = VIPDatabase.getPrinterConfig();
   const numCopies = printerCfg.copies || 1;
+  const textReceipt = buildOrderTextReceipt(order, cfg, printerCfg);
 
-  // 1. TENTA PRIMEIRO O SERVIÇO DE IMPRESSÃO DIRETA LOCAL DO WINDOWS (SPOOLER NATIVO - ZERO JANELAS)
+  // 1. TENTA PRIMEIRO O SERVIÇO DE IMPRESSÃO DIRETA LOCAL DO WINDOWS (PORTA 18181 - ZERO JANELAS)
   try {
-    const textReceipt = buildOrderTextReceipt(order, cfg, printerCfg);
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
+    const timeoutId = setTimeout(() => controller.abort(), 1200);
 
     const token = (window.VIPWhatsAppGateway && typeof window.VIPWhatsAppGateway.getLocalAuthToken === "function")
       ? await window.VIPWhatsAppGateway.getLocalAuthToken()
@@ -3174,317 +3121,84 @@ window.printOrderReceipt = async function(orderId, isAutoPrint = false) {
         VIPDatabase.markOrderPrinted(orderId);
         renderLiveOrders();
         checkPrintAgentStatus();
-        console.log(`[OK] Pedido #${order.id} impresso diretamente no Spooler sem dialogos.`);
+        console.log(`[OK] Pedido #${order.id} impresso diretamente na impressora local sem diálogos.`);
+        if (typeof showToastNotification === "function" && !isAutoPrint) {
+          showToastNotification(`✓ Pedido #${order.id} impresso diretamente na impressora!`);
+        }
         return;
       }
     }
   } catch (agentErr) {
-    // Se o serviço local de spooler não estiver ativo neste computador
+    // Computador atual não tem o spooler local ou está acessando remotamente
   }
 
-  // REGRA CRÍTICA ANTI-INTERRUPÇÃO:
-  // Se for disparo automático (autoPrint) e este computador não estiver com o spooler local conectado,
-  // NUNCA abre janela nativa de confirmação do navegador (window.print()) para não travar a tela do operador!
-  // A impressão já é captada e processada automaticamente pelo computador central com a impressora.
+  // 2. SE NÃO TEM SPOOLER NESTE DISPOSITIVO (ex: acessando de notebook, celular ou outro PC):
+  // Envia ordem de impressão silenciosa para a Nuvem Supabase para a impressora da loja imprimir diretamente!
+  try {
+    const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
+    if (sb) {
+      await sb.from("orders").update({
+        printed: false,
+        updated_at: new Date().toISOString()
+      }).eq("id", order.id);
+
+      await sb.from("store_settings").upsert({
+        id: "print_queue",
+        value: {
+          orderId: order.id,
+          receiptText: textReceipt,
+          copies: numCopies,
+          requestedAt: Date.now(),
+          requestedBy: "Painel Web Remoto"
+        },
+        updated_at: new Date().toISOString()
+      });
+
+      VIPDatabase.markOrderPrinted(orderId);
+      renderLiveOrders();
+      console.log(`[OK] Pedido #${order.id} enfileirado na nuvem para impressão na loja.`);
+      if (typeof showToastNotification === "function") {
+        showToastNotification(`✓ Pedido #${order.id} enviado para a impressora da loja!`);
+      }
+      return;
+    }
+  } catch (cloudErr) {
+    console.warn("[Cloud Print] Falha ao enfileirar impressão na nuvem:", cloudErr);
+  }
+
+  // REGRA CRÍTICA DEFINITIVA (ZERO JANELAS / ZERO INTERRUPÇÕES):
+  // Se for disparo automático (isAutoPrint), NUNCA abre janela nativa de impressão (window.print())
+  // para não travar o computador do operador com caixas de diálogo!
   if (isAutoPrint) {
-    console.log(`[AutoPrint] Terminal sem spooler local direto; impressão do pedido #${order.id} delegada ao agente de impressão da loja.`);
     return;
   }
 
-  // 2. SE O OPERADOR CLICOU MANUALMENTE ("Imprimir Comprovante"), USA O MOTOR KIOSK HTML / DIÁLOGO NATIVO
-  const paperClass = printerCfg.paperWidth === "58mm" ? "paper-58mm" : "paper-80mm";
-  const orderDateStr = new Date(order.createdAt).toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
-  });
+  // 3. APENAS SE O OPERADOR CLICOU MANUALMENTE COM TECLA SHIFT OU EM MODO KIOSK EXPLÍCITO:
+  const isShiftPressed = event && event.shiftKey;
+  if (!isShiftPressed) {
+    // Feedback amigável sem abrir janela
+    if (typeof showToastNotification === "function") {
+      showToastNotification(`✓ Ordem de impressão enviada para o computador da loja!`);
+    }
+    return;
+  }
 
-  const orderDrinks = extractOrderDrinks(order);
-  const hasDrinks = orderDrinks.length > 0;
-  const paymentInfo = getMotoboyPaymentInfo(order);
-
+  // Renderização HTML compacta de 1 única página se exigido
   const receiptArea = document.getElementById("thermal-receipt-area");
   if (!receiptArea) return;
+  const paperClass = printerCfg.paperWidth === "58mm" ? "paper-58mm" : "paper-80mm";
   receiptArea.className = `thermal-receipt-area ${paperClass}`;
-  receiptArea.innerHTML = "";
-
-  // Aplicar dimensões, margens e tipografia dinâmicas no elemento de impressão (76mm com margens 2mm & 2mm na bobina 80mm)
-  const printableWidthMm = parseInt(printerCfg.printableWidthMm) || (printerCfg.paperWidth === "58mm" ? 50 : 76);
-  const marginSideMm = parseInt(printerCfg.marginSideMm) !== undefined ? parseInt(printerCfg.marginSideMm) : 2;
-
-  let fontFam = "'Consolas', 'Courier New', Courier, monospace";
-  if (printerCfg.fontFamily === "sans-serif") {
-    fontFam = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
-  } else if (printerCfg.fontFamily === "condensed") {
-    fontFam = "'Arial Narrow', 'Franklin Gothic Medium', 'Tw Cen MT', sans-serif";
-  }
-
-  let fSize = "11pt";
-  if (printerCfg.fontSize === "small") fSize = "9.5pt";
-  else if (printerCfg.fontSize === "large") fSize = "12.5pt";
-  else if (printerCfg.fontSize === "xlarge") fSize = "14pt";
-
-  let fWeight = "700";
-  if (printerCfg.fontWeight === "normal") fWeight = "500";
-  else if (printerCfg.fontWeight === "heavy") fWeight = "900";
-
-  let lSpacing = "1.28";
-  if (printerCfg.lineSpacing === "compact") lSpacing = "1.15";
-  else if (printerCfg.lineSpacing === "spacious") lSpacing = "1.45";
-
-  // Centralização geométrica e dimensionamento exato no papel (margens 2mm & 2mm)
-  receiptArea.style.setProperty("width", `${printableWidthMm}mm`, "important");
-  receiptArea.style.setProperty("max-width", `${printableWidthMm}mm`, "important");
-  receiptArea.style.setProperty("min-width", `${printableWidthMm}mm`, "important");
-  receiptArea.style.setProperty("margin-left", "auto", "important");
-  receiptArea.style.setProperty("margin-right", "auto", "important");
-  receiptArea.style.setProperty("margin-top", "0", "important");
-  receiptArea.style.setProperty("margin-bottom", "0", "important");
-  receiptArea.style.setProperty("position", "relative", "important");
-  receiptArea.style.setProperty("left", "auto", "important");
-  receiptArea.style.setProperty("right", "auto", "important");
-  receiptArea.style.setProperty("padding-left", `${marginSideMm}mm`, "important");
-  receiptArea.style.setProperty("padding-right", `${marginSideMm}mm`, "important");
-  receiptArea.style.setProperty("box-sizing", "border-box", "important");
-  receiptArea.style.setProperty("text-align", "left", "important");
-  receiptArea.style.setProperty("font-family", fontFam, "important");
-  receiptArea.style.setProperty("font-size", fSize, "important");
-  receiptArea.style.setProperty("font-weight", fWeight, "important");
-  receiptArea.style.setProperty("line-height", lSpacing, "important");
-
-  const showLogo = printerCfg.printLogo !== false && cfg.logoUrl;
-  const logoHtml = showLogo ? `
-    <div class="receipt-logo-wrap" style="text-align: center; margin-bottom: 6px;">
-      <img src="${cfg.logoUrl}" alt="Logo" style="max-height: 52px; max-width: 140px; object-fit: contain; filter: grayscale(100%) contrast(150%);">
+  receiptArea.innerHTML = `
+    <div class="receipt-copy" style="font-family:monospace; font-size:10pt; line-height:1.2; padding:2mm 0; max-width:76mm; margin:0 auto;">
+      <pre style="margin:0; font-family:monospace; font-size:10pt; white-space:pre-wrap; word-break:break-word;">${textReceipt}</pre>
     </div>
-  ` : "";
+  `;
 
-  for (let copy = 1; copy <= numCopies; copy++) {
-    const copyLabel = numCopies > 1
-      ? (copy === 1 ? "[ 1ª VIA - COZINHA / PREPARO ]" : "[ 2ª VIA - CLIENTE / ENTREGA ]")
-      : "[ VIA COZINHA / CONTROLE ]";
-
-    let itemsTableRows = "";
-    (order.items || []).forEach(item => {
-      if (item.type === "kit") {
-        let flavorLines = "";
-        (item.flavors || []).forEach(f => {
-          flavorLines += `<div class="receipt-flavor-line"><span class="receipt-flavor-qty">▶ ${f.quantity}x</span> <strong>${f.name.toUpperCase()}</strong></div>`;
-        });
-
-        let extrasText = "";
-        if (item.flavorExtraCost && item.flavorExtraCost > 0) {
-          extrasText += `<div class="receipt-extra-line">★ Adic. nobres: +${formatBRL(item.flavorExtraCost)}</div>`;
-        }
-        if (item.sauces && item.sauces.length > 0) {
-          const sText = item.sauces.map(s => `${s.quantity}x ${s.name}`).join(", ");
-          extrasText += `<div class="receipt-extra-line">★ Molhos: ${sText}</div>`;
-        }
-
-        itemsTableRows += `
-          <tr>
-            <td colspan="2" class="receipt-item-desc">1x ${item.kitName || "Kit de Salgados"}</td>
-            <td class="receipt-item-price">${formatBRL(item.finalPrice || 0)}</td>
-          </tr>
-          <tr>
-            <td colspan="3" class="receipt-subitems">
-              ${flavorLines}
-              ${extrasText}
-            </td>
-          </tr>
-        `;
-      } else if (item.type === "combo") {
-        let comboItemsLines = "";
-        (item.items || []).forEach(ci => {
-          const isDrink = isOrderDrinkItem(ci);
-          if (isDrink && printerCfg.highlightDrinks !== false) {
-            comboItemsLines += `<div class="receipt-flavor-line"><span class="receipt-flavor-qty">▶ ${ci.quantity}x</span> 🥤 <strong>[BEBIDA GELADA] ${ci.name.toUpperCase()}</strong> ➔ PEGAR NA GELADEIRA!</div>`;
-          } else {
-            comboItemsLines += `<div class="receipt-flavor-line"><span class="receipt-flavor-qty">▶ ${ci.quantity}x</span> <strong>${ci.name.toUpperCase()}</strong></div>`;
-          }
-        });
-
-        itemsTableRows += `
-          <tr>
-            <td colspan="2" class="receipt-item-desc">1x ${item.name || "Combo Promocional"}</td>
-            <td class="receipt-item-price">${formatBRL(item.finalPrice || 0)}</td>
-          </tr>
-          <tr>
-            <td colspan="3" class="receipt-subitems">
-              ${comboItemsLines}
-              <small>(Economia real: ${formatBRL(item.savings || 0)})</small>
-            </td>
-          </tr>
-        `;
-      } else {
-        const isDrink = isOrderDrinkItem(item);
-        if (isDrink && printerCfg.highlightDrinks !== false) {
-          itemsTableRows += `
-            <tr class="receipt-drink-item-row">
-              <td colspan="2" class="receipt-item-desc receipt-drink-name">
-                🥤 [BEBIDA GELADA] ${item.quantity}x ${item.name}
-                <span class="receipt-drink-subhighlight">➔ PEGAR NA GELADEIRA ANTES DE ENVIAR</span>
-              </td>
-              <td class="receipt-item-price">${formatBRL((item.price || 0) * (item.quantity || 1))}</td>
-            </tr>
-          `;
-        } else {
-          itemsTableRows += `
-            <tr>
-              <td colspan="2" class="receipt-item-desc">${item.quantity}x ${item.name}</td>
-              <td class="receipt-item-price">${formatBRL((item.price || 0) * (item.quantity || 1))}</td>
-            </tr>
-          `;
-        }
-      }
-    });
-
-    const drinksChecklistBox = (printerCfg.highlightDrinks !== false && hasDrinks) ? `
-      <div class="receipt-drinks-checklist-box">
-        <div class="drinks-checklist-title">*** 🥤 ATENÇÃO: NÃO ESQUECER A BEBIDA! ***</div>
-        <div class="drinks-checklist-sub">RETIRAR DA GELADEIRA ANTES DE ENTREGAR AO MOTOBOY:</div>
-        <div class="drinks-checklist-items">
-          ${orderDrinks.map(d => `<div class="drinks-chk-item">[ ] 👉 <strong>${d.quantity}x ${d.name}</strong></div>`).join("")}
-        </div>
-      </div>
-    ` : "";
-
-    const motoboyPaymentBox = (printerCfg.showMotoboyBox !== false && order.fulfillment === "Entrega") ? `
-      <div class="receipt-motoboy-box">
-        <div class="motoboy-box-header">*** ATENÇÃO ${paymentInfo.roleTitle} ***</div>
-        <div class="motoboy-box-badge">${paymentInfo.badgeText}</div>
-        <div class="motoboy-box-amount">TOTAL A COBRAR: ${paymentInfo.totalFormatted}</div>
-        <div class="motoboy-box-instructions">
-          ${paymentInfo.instruction}
-        </div>
-        ${paymentInfo.changeAlert}
-        ${(printerCfg.highlightDrinks !== false && hasDrinks) ? `
-          <div class="motoboy-drink-check">
-            [ ] CONFERIU A BEBIDA NA BAG? (🥤 ${orderDrinks.reduce((a, b) => a + b.quantity, 0)} item(ns) gelado(s))
-          </div>
-        ` : ""}
-      </div>
-    ` : "";
-
-    const isPix = order.paymentMethod === "PIX" || String(order.paymentMethod || "").toUpperCase().includes("PIX");
-    const pixBoxHtml = (printerCfg.printPixDetails !== false && isPix) ? `
-      <div class="receipt-pix-box">
-        <strong>*** PAGAMENTO VIA PIX ***</strong><br>
-        <span>Chave: <strong>${cfg.pixKey || "(21) 98675-8102"}</strong></span><br>
-        <span>Favorecido: ${cfg.name || "Salgados VIP"}</span><br>
-        <small>Favor enviar o comprovante no WhatsApp da loja</small>
-      </div>
-    ` : "";
-
-    const copyHtml = `
-      <div class="receipt-copy" style="margin-bottom: 25px;">
-        <div class="receipt-header">
-          ${logoHtml}
-          <h2>${(cfg.name || "SALGADOS VIP").toUpperCase()}</h2>
-          <p>NOVA IGUAÇU - RIO DE JANEIRO</p>
-          <p>Rua Isabel Pedrosa, 31 - Da Luz</p>
-          <p>WhatsApp: ${cfg.phone || "(21) 98675-8102"}</p>
-          <div style="margin-top: 4px; text-align: center;"><span class="receipt-via-badge">[ ${copyLabel} ]</span></div>
-        </div>
-
-        <div class="receipt-order-meta">
-          <div class="row" style="font-size: 11pt; border-bottom: 1px solid #000; padding-bottom: 3px; margin-bottom: 4px;">
-            <span><strong>PEDIDO:</strong> #${order.id}</span>
-            <span><strong>DATA:</strong> ${orderDateStr}</span>
-          </div>
-          <div class="row">
-            <span><strong>CLIENTE:</strong> ${order.customer?.name || "Cliente"}</span>
-          </div>
-          <div class="row">
-            <span><strong>CONTATO:</strong> ${order.customer?.phone || "-"}</span>
-          </div>
-          <div class="row" style="margin-top: 3px;">
-            <span><strong>TIPO:</strong> ${order.fulfillment === "Entrega" ? "🛵 MOTO ENTREGA" : "🏪 RETIRADA BALCÃO"}</span>
-          </div>
-          ${order.timingType === "agendado" ? `
-            <div style="border: 2px solid #000; padding: 4px; text-align: center; margin: 5px 0; font-weight: bold; font-size: 10pt; box-sizing: border-box; width: 100%;">
-              *** PEDIDO AGENDADO ***<br>
-              PARA: ${order.scheduledDateTimeFormatted || (order.scheduledDate + ' AS ' + order.scheduledTime)}
-            </div>
-          ` : `
-            <div class="row" style="margin-top: 2px;">
-              <span><strong>PREVISÃO:</strong> IMEDIATO / AGORA</span>
-            </div>
-          `}
-          ${(printerCfg.highlightDrinks !== false && hasDrinks) ? `
-            <div class="receipt-drink-pill-banner">
-              *** 🥤 PEDIDO CONTÉM BEBIDA GELADA (${orderDrinks.reduce((a, b) => a + b.quantity, 0)} UN) ***
-            </div>
-          ` : ""}
-          ${order.fulfillment === "Entrega" ? `
-            <div style="margin-top: 3px; border-top: 1px dotted #888; padding-top: 3px;">
-              <strong>ENDEREÇO DE ENTREGA:</strong><br>
-              ${order.customer?.address || "Não informado"}
-              ${order.deliveryDistanceKm ? `<br><small><strong>DISTÂNCIA ESTIMADA:</strong> ${order.deliveryDistanceKm.toFixed(1)} km ${order.customer?.neighborhood ? `(${order.customer.neighborhood})` : ''}</small>` : ""}
-            </div>
-          ` : `
-            <div style="margin-top: 3px; border-top: 1px dotted #888; padding-top: 3px;">
-              <strong>LOCAL:</strong> Retirada na Loja Da Luz
-            </div>
-          `}
-        </div>
-
-        <div class="receipt-divider"></div>
-        <div class="receipt-section-title">ITENS DO PEDIDO</div>
-
-        <table class="receipt-items-table">
-          ${itemsTableRows}
-        </table>
-
-        ${drinksChecklistBox}
-
-        ${order.notes ? `
-          <div class="receipt-divider"></div>
-          <div>
-            <strong>OBSERVAÇÕES:</strong><br>
-            ${order.notes}
-          </div>
-        ` : ""}
-
-        <div class="receipt-totals">
-          <div class="row">
-            <span>SUBTOTAL:</span>
-            <span>${formatBRL(order.subtotal || order.totalAmount || 0)}</span>
-          </div>
-          <div class="row">
-            <span>TAXA ENTREGA${order.deliveryDistanceKm ? ` (${order.deliveryDistanceKm.toFixed(1)} km)` : ""}:</span>
-            <span>${order.deliveryFee && order.deliveryFee > 0 ? formatBRL(order.deliveryFee) : "R$ 0,00"}</span>
-          </div>
-          <div class="row total-big">
-            <span>TOTAL DO PEDIDO:</span>
-            <span>${formatBRL(order.totalAmount || 0)}</span>
-          </div>
-        </div>
-
-        ${motoboyPaymentBox}
-        ${pixBoxHtml}
-
-        <div class="receipt-footer">
-          <p>Obrigado pela preferência!</p>
-          <p>${cfg.name || "Salgados VIP"} - O Melhor de Nova Iguaçu</p>
-        </div>
-
-        ${copy < numCopies 
-          ? `<div class="receipt-cut-line">-- CORTE DA BOBINA --</div>` 
-          : (printerCfg.autoCutPaper !== false ? `<div style="height: 18mm; border-bottom: 1px dashed #000; text-align: center; font-size: 8pt; padding-top: 8mm; color: #666;">- - - - - - - - - - - - - - - - -</div>` : "")
-        }
-      </div>
-    `;
-
-    receiptArea.innerHTML += copyHtml;
-  }
-
-  // Marcar como impresso no banco
   VIPDatabase.markOrderPrinted(orderId);
   renderLiveOrders();
-
-  // Acionar impressão do navegador / impressora térmica instalada
   setTimeout(() => {
     window.print();
-  }, 200);
+  }, 150);
 };
 
 // Teste de impressão rápida a partir das configurações
@@ -10673,6 +10387,13 @@ window.exportCustomersToCSV = function() {
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
   checkSession();
+
+  // Atualização dinâmica garantida do rodapé com a versão oficial
+  const footerVer = document.getElementById("admin-footer-version");
+  if (footerVer) {
+    footerVer.textContent = window.VIP_APP_VERSION || "v44.0 (Bkp 44)";
+  }
+
   setTimeout(() => {
     if (window.VIPWhatsAppGateway && typeof VIPWhatsAppGateway.init === "function") {
       VIPWhatsAppGateway.init().then(() => {

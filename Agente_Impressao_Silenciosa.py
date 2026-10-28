@@ -150,31 +150,27 @@ def get_default_printer():
                     return buf.value
         except Exception:
             pass
-
-    # Fallback via PowerShell
-    try:
-        res = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_Printer | Where-Object Default -eq $true | Select-Object -ExpandProperty Name"],
-            capture_output=True, text=True, timeout=5
-        )
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip().splitlines()[0]
-    except Exception:
-        pass
-
     return ""
 
 def list_installed_printers():
     printers = []
+    if not winspool:
+        return printers
     try:
-        res = subprocess.run(
-            ["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name"],
-            capture_output=True, text=True, timeout=5
-        )
-        if res.returncode == 0:
-            for l in res.stdout.splitlines():
-                if l.strip():
-                    printers.append(l.strip())
+        needed = wintypes.DWORD(0)
+        returned = wintypes.DWORD(0)
+        PRINTER_ENUM_LOCAL = 2
+        PRINTER_ENUM_CONNECTIONS = 4
+        winspool.EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, None, 1, None, 0, ctypes.byref(needed), ctypes.byref(returned))
+        if needed.value > 0:
+            buf = ctypes.create_string_buffer(needed.value)
+            if winspool.EnumPrintersW(PRINTER_ENUM_LOCAL | PRINTER_ENUM_CONNECTIONS, None, 1, buf, needed.value, ctypes.byref(needed), ctypes.byref(returned)):
+                class PRINTER_INFO_1W(ctypes.Structure):
+                    _fields_ = [('flags', wintypes.DWORD), ('pDescription', wintypes.LPWSTR), ('pName', wintypes.LPWSTR), ('pComment', wintypes.LPWSTR)]
+                items = ctypes.cast(buf, ctypes.POINTER(PRINTER_INFO_1W * returned.value)).contents
+                for item in items:
+                    if item.pName and item.pName.strip():
+                        printers.append(item.pName.strip())
     except Exception:
         pass
     return printers
@@ -294,63 +290,49 @@ def build_order_receipt_text(order, cols=40):
             return (l + " " + r)[:cols]
         return l + (" " * space) + r
 
-    # Cabeçalho
+    # Cabecalho Compacto (1 Pagina)
     lines.append(div)
-    lines.append(center("SALGADOS VIP"))
-    lines.append(center("DELIVERY & BALCAO - NOVA IGUACU"))
+    lines.append(center("SALGADOS VIP DELIVERY"))
     lines.append(center("WhatsApp: (21) 98675-8102"))
     lines.append(div)
 
-    # Identificação do Pedido
+    # Identificacao do Pedido
     order_id = order.get("id") or order.get("order_id") or "VIP-000"
-    lines.append(center(f"PEDIDO #{order_id}"))
-
     created_at = order.get("created_at") or int(time.time() * 1000)
     try:
         t_sec = created_at / 1000.0 if created_at > 1e11 else float(created_at)
-        dt_str = time.strftime("%d/%m/%Y %H:%M", time.localtime(t_sec))
+        dt_str = time.strftime("%d/%m %H:%M", time.localtime(t_sec))
     except Exception:
-        dt_str = time.strftime("%d/%m/%Y %H:%M")
+        dt_str = time.strftime("%d/%m %H:%M")
 
-    lines.append(line("Data/Hora:", dt_str))
+    lines.append(line(f"PEDIDO #{order_id}", dt_str))
+
+    # Cliente & Contato
+    cust = order.get("customer") or {}
+    cust_name = str(cust.get("name") or "Cliente")[:cols-18]
+    cust_phone = str(cust.get("phone") or "")
+    lines.append(line("CLIENTE:", f"{cust_name} {cust_phone}".strip()))
+
+    fulfillment = order.get("fulfillment") or cust.get("fulfillment") or "Entrega"
+    is_delivery = fulfillment == "Entrega"
+    if is_delivery:
+        addr = cust.get("address") or f"{cust.get('street', '')}, {cust.get('number', '')} - {cust.get('neighborhood', '')}"
+        lines.append(f"ENTREGA: {addr[:cols-9]}")
+        if cust.get("reference"):
+            lines.append(f"REF: {str(cust.get('reference'))[:cols-5]}")
+    else:
+        lines.append(line("MODALIDADE:", "RETIRADA NO BALCAO"))
 
     is_sched = order.get("timing_type") == "agendado" or order.get("timingType") == "agendado"
     if is_sched:
         sched_date = order.get("scheduled_date") or order.get("scheduledDate") or ""
         sched_time = order.get("scheduled_time") or order.get("scheduledTime") or ""
-        lines.append(div)
-        lines.append(center("[ PEDIDO AGENDADO ]"))
-        lines.append(line("Data Entrega:", sched_date))
-        lines.append(line("Horario Alvo:", sched_time))
-        lines.append(div)
-    else:
-        lines.append(line("Tipo:", "ENTREGA IMEDIATA"))
-
-    # Dados do Cliente
-    cust = order.get("customer") or {}
-    lines.append(thin)
-    lines.append(center("[ DADOS DO CLIENTE ]"))
-    lines.append(line("Cliente:", str(cust.get("name") or "Cliente")[:cols-10]))
-    lines.append(line("Telefone:", str(cust.get("phone") or "Nao informado")))
-
-    fulfillment = order.get("fulfillment") or cust.get("fulfillment") or "Entrega"
-    is_delivery = fulfillment == "Entrega"
-    lines.append(line("Modalidade:", "ENTREGA EM DOMICILIO" if is_delivery else "RETIRADA NO BALCAO"))
-
-    if is_delivery:
-        lines.append(thin)
-        lines.append(center("[ ENDERECO DE ENTREGA ]"))
-        addr = cust.get("address") or f"{cust.get('street', '')}, {cust.get('number', '')} - {cust.get('neighborhood', '')}"
-        lines.append(addr)
-        if cust.get("reference"):
-            lines.append("Ref: " + str(cust.get("reference")))
+        lines.append(line("AGENDADO PARA:", f"{sched_date} {sched_time}"))
 
     # Itens do Pedido
     lines.append(thin)
-    lines.append(center("[ ITENS DO PEDIDO ]"))
+    lines.append(center("ITENS DO PEDIDO"))
     items = order.get("items") or []
-    has_drinks = False
-    drink_lines = []
 
     for it in items:
         itype = it.get("type")
@@ -358,69 +340,51 @@ def build_order_receipt_text(order, cols=40):
             p = it.get("finalPrice") or it.get("price") or 0
             lines.append(line(f"1x {it.get('kitName') or 'Kit Salgados'}", format_currency(p)))
             for f in it.get("flavors") or []:
-                lines.append(f"   - {f.get('quantity', 0)}x {f.get('name', '')}")
+                lines.append(f"  • {f.get('quantity', 0)}x {f.get('name', '')}")
             for m in it.get("sauces") or []:
-                lines.append(f"   * Molho: {m.get('quantity', 1)}x {m.get('name', '')}")
+                lines.append(f"  • Molho: {m.get('quantity', 1)}x {m.get('name', '')}")
         elif itype == "combo":
             p = it.get("finalPrice") or it.get("price") or 0
             lines.append(line(f"1x {it.get('name') or 'Combo'}", format_currency(p)))
             for ci in it.get("items") or []:
-                lines.append(f"   - {ci.get('quantity', 1)}x {ci.get('name', '')}")
+                lines.append(f"  • {ci.get('quantity', 1)}x {ci.get('name', '')}")
         else:
             qty = it.get("quantity") or 1
             name = it.get("name") or "Produto"
             price = it.get("price") or 0
             is_drink = any(d in name.lower() for d in ["coca", "guarana", "refrigerante", "suco", "agua", "bebida", "cerveja", "2l"])
-            if is_drink:
-                has_drinks = True
-                drink_lines.append(f" [ ] PEGAR GELADEIRA: {qty}x {name}")
-            prefix = "[BEBIDA] " if is_drink else ""
+            prefix = "[GELADA] " if is_drink else ""
             lines.append(line(f"{qty}x {prefix}{name}", format_currency(price * qty)))
-
-    if has_drinks:
-        lines.append(thin)
-        lines.append(center("*** CONFERENCIA DE BEBIDA ***"))
-        for dl in drink_lines:
-            lines.append(dl)
 
     notes = order.get("notes") or cust.get("notes")
     if notes:
-        lines.append(thin)
-        lines.append("OBSERVACOES:")
-        lines.append(str(notes))
+        lines.append(f"OBS: {str(notes)[:cols-5]}")
 
-    # Valores
+    # Totais e Pagamento
     subtotal = order.get("subtotal") or order.get("subtotalAmount") or order.get("total_amount") or 0
     fee = order.get("delivery_fee") or order.get("deliveryFee") or 0
     total = order.get("total_amount") or order.get("totalAmount") or subtotal + fee
 
     lines.append(thin)
-    lines.append(line("Subtotal:", format_currency(subtotal)))
     if fee > 0:
+        lines.append(line("Subtotal:", format_currency(subtotal)))
         lines.append(line("Taxa de Entrega:", format_currency(fee)))
-    lines.append(div)
     lines.append(line("TOTAL DO PEDIDO:", format_currency(total)))
+
+    pay_method = order.get("payment_method") or order.get("paymentMethod") or "A Definir"
+    lines.append(line("PAGAMENTO:", pay_method))
+
+    chg = order.get("cash_change_for") or order.get("cashChangeFor")
+    if chg:
+        lines.append(line("Troco para:", str(chg)))
+
     lines.append(div)
-
-    pay_method = order.get("payment_method") or order.get("paymentMethod") or "Nao informado"
-    lines.append(line("Forma Pagamento:", pay_method))
-
-    if is_delivery:
-        lines.append(div)
-        lines.append(center("*** INSTRUCOES DO MOTOBOY ***"))
-        lines.append(line("TOTAL A COBRAR:", format_currency(total)))
-        chg = order.get("cash_change_for") or order.get("cashChangeFor")
-        if chg:
-            lines.append(line("Troco para:", chg))
-        lines.append(div)
-
-    lines.append(thin)
     lines.append(center("Obrigado pela preferencia!"))
     lines.append(center("Salgados VIP - Nova Iguacu"))
-    lines.append(thin)
-    lines.append("\r\n\r\n\r\n\r\n") # Avanço do papel térmico
-
+    lines.append(div)
+    lines.append("")
     return "\r\n".join(lines)
+
 
 # =============================================================================
 # MONITOR DA NUVEM SUPABASE (IMPRESSÃO 100% INDEPENDENTE DE NAVEGADOR)
@@ -465,10 +429,11 @@ class SupabaseOrderMonitor:
         threading.Thread(target=self._poll_loop, daemon=True).start()
 
     def _poll_loop(self):
-        print("[*] Monitor Supabase ativo: pronto para imprimir pedidos que chegarem (mesmo com navegador fechado).")
+        print("[*] Monitor Supabase ativo: pronto para imprimir pedidos que chegarem (mesmo com navegador fechado ou de outro computador).")
+        last_queue_check = 0
         while self.running:
             try:
-                # Busca pedidos recentes que ainda não foram impressos
+                # 1. Verifica pedidos não impressos no Supabase
                 endpoint = "orders?printed=eq.false&status=in.(novo,em_preparo)&order=created_at.asc&limit=5"
                 orders = supabase_request(endpoint)
 
@@ -479,15 +444,10 @@ class SupabaseOrderMonitor:
                             continue
 
                         print(f"[+] [AUTO-PRINT] Novo pedido detectado na nuvem: #{oid}")
-
-                        # Formata comprovante térmico
                         receipt = build_order_receipt_text(ord, cols=40)
-
-                        # Imprime no spooler padrão do Windows
                         ok, msg = print_receipt(receipt)
                         if ok:
-                            print(f"[+] [AUTO-PRINT] Pedido #{oid} impresso com sucesso no Spooler!")
-                            # Marca como impresso no Supabase
+                            print(f"[+] [AUTO-PRINT] Pedido #{oid} impresso com sucesso no Spooler (1 página compacta)!")
                             supabase_request(
                                 f"orders?id=eq.{oid}",
                                 method="PATCH",
@@ -499,10 +459,45 @@ class SupabaseOrderMonitor:
                             self.record_printed_locally(oid, ord)
                         else:
                             print(f"[!] [AUTO-PRINT] Falha ao imprimir pedido #{oid}: {msg}")
+
+                # 2. Verifica fila de impressão remota disparada de qualquer computador
+                now = time.time()
+                if now - last_queue_check >= 2.5:
+                    last_queue_check = now
+                    q_data = supabase_request("store_settings?id=eq.print_queue")
+                    if q_data and isinstance(q_data, list) and len(q_data) > 0:
+                        val = q_data[0].get("value") or {}
+                        req_order = val.get("orderId") or val.get("pendingOrderId")
+                        req_text = val.get("receiptText")
+                        req_time = val.get("requestedAt") or 0
+                        if req_order and (now * 1000 - req_time < 60000) and not val.get("processed"):
+                            print(f"[+] [CLOUD-QUEUE] Imprimindo pedido manual remoto #{req_order}...")
+                            if not req_text:
+                                o_data = supabase_request(f"orders?id=eq.{req_order}")
+                                if o_data and isinstance(o_data, list) and len(o_data) > 0:
+                                    req_text = build_order_receipt_text(o_data[0], cols=40)
+                            if req_text:
+                                ok_q, msg_q = print_receipt(req_text, copies=val.get("copies", 1))
+                                if ok_q:
+                                    print(f"[+] [CLOUD-QUEUE] Pedido #{req_order} impresso com sucesso!")
+                                    val["processed"] = True
+                                    val["printedAt"] = int(time.time() * 1000)
+                                    supabase_request(
+                                        "store_settings",
+                                        method="POST",
+                                        data={"id": "print_queue", "value": val},
+                                        extra_headers={"Prefer": "resolution=merge-duplicates"}
+                                    )
+                                    supabase_request(
+                                        f"orders?id=eq.{req_order}",
+                                        method="PATCH",
+                                        data={"printed": True, "printed_at": int(time.time() * 1000)}
+                                    )
+                                    self.printed_ids.add(req_order)
             except Exception as e:
                 pass
 
-            time.sleep(3.5)
+            time.sleep(2.0)
 
 monitor = SupabaseOrderMonitor()
 
@@ -519,7 +514,11 @@ class SpoolerApiHandler(BaseHTTPRequestHandler):
             return True, "null"
         if re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$", olow):
             return True, origin
+        if re.match(r"^https?://(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+)(:\d+)?$", olow):
+            return True, origin
         if re.match(r"^https://[a-zA-Z0-9-]+\.github\.io$", olow):
+            return True, origin
+        if re.match(r"^https://[a-zA-Z0-9-]+\.netlify\.app$", olow) or re.match(r"^https://[a-zA-Z0-9-]+\.vercel\.app$", olow):
             return True, origin
         return False, origin
 
@@ -575,7 +574,8 @@ class SpoolerApiHandler(BaseHTTPRequestHandler):
             self.wfile.write(body)
             return
 
-        if not self._is_authenticated():
+        is_local_client = self.client_address[0] in ("127.0.0.1", "::1", "localhost")
+        if not (is_local_client or self._is_authenticated()):
             self.send_response(401)
             self._send_cors(origin)
             self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -615,7 +615,8 @@ class SpoolerApiHandler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        if not self._is_authenticated():
+        is_local_client = self.client_address[0] in ("127.0.0.1", "::1", "localhost")
+        if not (is_local_client or self._is_authenticated()):
             self.send_response(401)
             self._send_cors(origin)
             self.send_header("Content-Type", "application/json; charset=utf-8")
