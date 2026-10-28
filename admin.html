@@ -39,7 +39,7 @@
         <p>Salgados VIP - Gestão de Cardápio e Valores</p>
       </div>
 
-      <form id="admin-login-form" onsubmit="return false;">
+      <form id="admin-login-form" onsubmit="window.handleAdminLogin && window.handleAdminLogin(event); return false;">
         <div class="form-group">
           <label for="login-user"><i class="fa-solid fa-user"></i> Usuário ou E-mail</label>
           <input type="text" id="login-user" placeholder="Digite seu usuário ou e-mail" autocomplete="username" required>
@@ -62,14 +62,14 @@
           <i class="fa-solid fa-circle-exclamation"></i> <span id="login-error-text">Usuário ou senha incorretos.</span>
         </div>
 
-        <button type="submit" id="btn-do-login" class="btn-primary-admin" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
+        <button type="submit" id="btn-do-login" onclick="window.handleAdminLogin && window.handleAdminLogin(event)" class="btn-primary-admin" style="display: flex; justify-content: center; align-items: center; gap: 8px;">
           <span id="btn-login-text">Entrar no Painel</span> <i class="fa-solid fa-arrow-right-to-bracket"></i>
         </button>
       </form>
 
       <div class="login-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.82rem;">
         <a href="index.html" class="back-to-store-link"><i class="fa-solid fa-arrow-left"></i> Voltar ao Cardápio</a>
-        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v44.0 (Bkp 44)</span>
+        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v45.0 (Bkp 45)</span>
         <a href="javascript:void(0)" onclick="openRecoveryModal()" style="color: #64748b; text-decoration: none; font-weight: 600;"><i class="fa-solid fa-shield-halved"></i> Recuperar Acesso</a>
       </div>
     </div>
@@ -175,7 +175,7 @@
 
         <div class="sidebar-footer">
           <div style="padding: 4px 10px; margin-bottom: 6px; font-size: 0.72rem; color: #94a3b8; text-align: center; font-family: ui-monospace, monospace;">
-            v44.0 (Bkp 44)
+            v45.0 (Bkp 45)
           </div>
           <button type="button" class="btn-sidebar-collapse" onclick="toggleSidebarMenu()" title="Recolher menu lateral para liberar visão da tela inteira">
             <i class="fa-solid fa-angles-left"></i>
@@ -2152,7 +2152,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 7px;">
           <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%;" title="Sistema Online e Operante"></span>
-          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 44.0 (Bkp 44)</span>
+          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 45.0 (Bkp 45)</span>
         </div>
       </footer>
 
@@ -3392,8 +3392,8 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=42.0"></script>
-  <script src="admin.js?v=42.0"></script>
-  <script src="pwa.js?v=42.0"></script>
+  <script src="shared-data.js?v=45.0"></script>
+  <script src="admin.js?v=45.0"></script>
+  <script src="pwa.js?v=45.0"></script>
 </body>
 </html>

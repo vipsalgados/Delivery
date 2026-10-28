@@ -65,51 +65,74 @@ window.togglePasswordVisibility = function(inputId, btnEl) {
 };
 
 // Login seguro conectado ao Supabase
-const btnLogin = document.getElementById("btn-do-login");
-if (btnLogin) {
-  btnLogin.addEventListener("click", async () => {
-    const user = document.getElementById("login-user").value.trim();
-    const pass = document.getElementById("login-pass").value.trim();
-    const errorEl = document.getElementById("login-error-msg");
-    const errorText = document.getElementById("login-error-text");
-    const btnText = document.getElementById("btn-login-text");
+window.handleAdminLogin = async function(event) {
+  if (event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+  const btnLogin = document.getElementById("btn-do-login");
+  const userEl = document.getElementById("login-user");
+  const passEl = document.getElementById("login-pass");
+  const errorEl = document.getElementById("login-error-msg");
+  const errorText = document.getElementById("login-error-text");
+  const btnText = document.getElementById("btn-login-text");
 
-    if (!user || !pass) {
-      if (errorText) errorText.textContent = "Preencha o usuário e a senha.";
+  const user = userEl ? userEl.value.trim() : "";
+  const pass = passEl ? passEl.value.trim() : "";
+
+  if (!user || !pass) {
+    if (errorText) errorText.textContent = "Preencha o usuário e a senha.";
+    if (errorEl) errorEl.style.display = "flex";
+    return;
+  }
+
+  if (btnLogin) btnLogin.disabled = true;
+  if (btnText) btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Autenticando...';
+  if (errorEl) errorEl.style.display = "none";
+
+  try {
+    const res = await VIPAuth.login(user, pass);
+    if (res.success) {
+      checkSession();
+    } else {
+      if (errorText) errorText.textContent = res.message || "Usuário ou senha incorretos.";
       if (errorEl) errorEl.style.display = "flex";
-      return;
     }
+  } catch (e) {
+    console.error("Erro no login VIPAuth:", e);
+    if (errorText) errorText.textContent = "Erro ao validar credenciais. Verifique sua conexão com a internet.";
+    if (errorEl) errorEl.style.display = "flex";
+  } finally {
+    if (btnLogin) btnLogin.disabled = false;
+    if (btnText) btnText.innerHTML = 'Entrar no Painel <i class="fa-solid fa-arrow-right-to-bracket"></i>';
+  }
+};
 
-    btnLogin.disabled = true;
-    if (btnText) btnText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Autenticando...';
-    if (errorEl) errorEl.style.display = "none";
-
-    try {
-      const res = await VIPAuth.login(user, pass);
-      if (res.success) {
-        checkSession();
-      } else {
-        if (errorText) errorText.textContent = res.message || "Usuário ou senha incorretos.";
-        if (errorEl) errorEl.style.display = "flex";
-      }
-    } catch (e) {
-      if (errorText) errorText.textContent = "Erro ao validar credenciais. Verifique sua conexão com a internet.";
-      if (errorEl) errorEl.style.display = "flex";
-    } finally {
-      btnLogin.disabled = false;
-      if (btnText) btnText.innerHTML = 'Entrar no Painel <i class="fa-solid fa-arrow-right-to-bracket"></i>';
-    }
-  });
-
+function initAdminLoginListeners() {
+  const btnLogin = document.getElementById("btn-do-login");
+  if (btnLogin) {
+    btnLogin.onclick = window.handleAdminLogin;
+  }
+  const loginForm = document.getElementById("admin-login-form");
+  if (loginForm) {
+    loginForm.onsubmit = function(e) {
+      if (e) e.preventDefault();
+      window.handleAdminLogin(e);
+      return false;
+    };
+  }
   ["login-user", "login-pass"].forEach(id => {
     const el = document.getElementById(id);
     if (el) {
-      el.addEventListener("keyup", (e) => {
-        if (e.key === "Enter") btnLogin.click();
-      });
+      el.onkeyup = function(e) {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          window.handleAdminLogin(e);
+        }
+      };
     }
   });
 }
+initAdminLoginListeners();
 
 // Logout
 const btnLogout = document.getElementById("btn-logout");
@@ -3066,13 +3089,9 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
   lines.push(center("Obrigado pela preferencia!"));
   lines.push(center(cfg.name || "Salgados VIP - Nova Iguacu"));
   lines.push(divider);
-  lines.push("
+  lines.push("\n\n");
 
-");
-
-  return lines.join("
-
-");
+  return lines.join("\n");
 }
 
 window.printOrderReceipt = async function(orderId, isAutoPrint = false, event = null) {
@@ -10386,12 +10405,13 @@ window.exportCustomersToCSV = function() {
 
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
+  initAdminLoginListeners();
   checkSession();
 
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v44.0 (Bkp 44)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v45.0 (Bkp 45)";
   }
 
   setTimeout(() => {
