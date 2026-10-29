@@ -69,7 +69,7 @@
 
       <div class="login-footer" style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem; font-size: 0.82rem;">
         <a href="index.html" class="back-to-store-link"><i class="fa-solid fa-arrow-left"></i> Voltar ao Cardápio</a>
-        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v45.0 (Bkp 45)</span>
+        <span style="color: #94a3b8; font-size: 0.72rem; font-family: ui-monospace, monospace; font-weight: 600;">v46.0 (Bkp 46)</span>
         <a href="javascript:void(0)" onclick="openRecoveryModal()" style="color: #64748b; text-decoration: none; font-weight: 600;"><i class="fa-solid fa-shield-halved"></i> Recuperar Acesso</a>
       </div>
     </div>
@@ -175,7 +175,7 @@
 
         <div class="sidebar-footer">
           <div style="padding: 4px 10px; margin-bottom: 6px; font-size: 0.72rem; color: #94a3b8; text-align: center; font-family: ui-monospace, monospace;">
-            v45.0 (Bkp 45)
+            v46.0 (Bkp 46)
           </div>
           <button type="button" class="btn-sidebar-collapse" onclick="toggleSidebarMenu()" title="Recolher menu lateral para liberar visão da tela inteira">
             <i class="fa-solid fa-angles-left"></i>
@@ -1790,13 +1790,23 @@
                     <!-- 2. Dispositivo e Bobina -->
                     <div class="form-row" style="margin-top: 1rem;">
                       <div class="form-group" style="flex: 1.5;">
-                        <label for="cfg-printer-target"><i class="fa-solid fa-desktop"></i> Dispositivo / Impressora de Saída</label>
-                        <select id="cfg-printer-target">
-                          <option value="windows_default" selected>Impressora Padrão do Windows (Recomendado - Spooler Nativo)</option>
-                          <option value="thermal_80">Impressora Térmica 80mm USB / Rede / Spooler</option>
-                          <option value="thermal_58">Impressora Térmica 58mm Portátil / Balcão</option>
+                        <label for="cfg-printer-target"><i class="fa-solid fa-desktop"></i> Dispositivo / Impressora de Saída deste PC</label>
+                        <select id="cfg-printer-target" onchange="if(window.VIPWebPrinter) VIPWebPrinter.setLocalTarget(this.value)">
+                          <option value="windows_default" selected>🖨️ Impressora Padrão do Windows deste PC (Automático)</option>
+                          <option value="webusb">🔌 Conexão Direta USB (WebUSB - Sem Aplicativos)</option>
+                          <option value="webserial">🔌 Conexão Serial / Cabo Virtual COM (WebSerial)</option>
+                          <option value="epson_thermal">Epson TM-T20 / TM-T88 (80mm Térmica)</option>
+                          <option value="elgin_thermal">Elgin i7 / i9 (80mm Térmica)</option>
+                          <option value="bematech_thermal">Bematech MP-4200 TH (80mm Térmica)</option>
+                          <option value="pos58_thermal">Mini POS-58 (58mm Balcão / Portátil)</option>
+                          <option value="pos80_thermal">POS-80 Comercial (80mm)</option>
+                          <option value="custom">Outra Impressora (Digitar Nome da Fila)</option>
                         </select>
-                        <small class="form-help">O sistema utiliza automaticamente a impressora definida como padrão no seu Windows.</small>
+                        <div id="cfg-printer-custom-name-box" style="display: none; margin-top: 8px;">
+                          <label for="cfg-printer-custom-name" style="font-size: 0.8rem; color: #64748b;"><i class="fa-solid fa-i-cursor"></i> Nome da Impressora no Windows:</label>
+                          <input type="text" id="cfg-printer-custom-name" placeholder="Ex: EPSON TM-T20 Receipt, Elgin i9, etc." onchange="if(window.VIPWebPrinter) VIPWebPrinter.setLocalTarget(this.value)">
+                        </div>
+                        <small class="form-help">Configuração independente para este computador: não afeta outros PCs que acessarem o painel.</small>
                       </div>
 
                       <div class="form-group" style="flex: 1;">
@@ -1813,6 +1823,27 @@
                           <option value="1" selected>1 Via (Cozinha)</option>
                           <option value="2">2 Vias (1 Cozinha + 1 Entrega)</option>
                         </select>
+                      </div>
+                    </div>
+
+                    <!-- Barra de Conexão Direta de Hardware & Teste Rápido (Universal para qualquer PC) -->
+                    <div style="margin: 0.8rem 0 1.25rem 0; padding: 12px 16px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                      <div id="vip-printer-device-status-text" style="font-size: 0.85rem; color: #1e293b;">
+                        <strong>Modo Sistema:</strong> Impressora padrão deste computador (Universal).
+                      </div>
+                      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                        <button type="button" class="btn-primary-admin" style="padding: 7px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;" onclick="if(window.VIPWebPrinter) VIPWebPrinter.pairUsbDevice()">
+                          <i class="fa-brands fa-usb"></i> Conectar Impressora USB (WebUSB)
+                        </button>
+                        <button type="button" class="btn-secondary-admin" style="padding: 7px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;" onclick="if(window.VIPWebPrinter) VIPWebPrinter.pairSerialPort()">
+                          <i class="fa-solid fa-plug"></i> Conectar Serial / COM
+                        </button>
+                        <button type="button" class="btn-secondary-admin" style="padding: 7px 14px; font-size: 0.82rem; display: inline-flex; align-items: center; gap: 6px;" onclick="if(window.VIPWebPrinter) VIPWebPrinter.testCurrentPrinter()">
+                          <i class="fa-solid fa-print"></i> Testar Impressão Imediata
+                        </button>
+                        <button type="button" class="btn-secondary-admin" style="padding: 7px 12px; font-size: 0.82rem; color: #dc2626;" onclick="if(window.VIPWebPrinter) VIPWebPrinter.disconnectUsb()" title="Desconectar dispositivo USB deste navegador">
+                          <i class="fa-solid fa-unlink"></i>
+                        </button>
                       </div>
                     </div>
 
@@ -2152,7 +2183,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 7px;">
           <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%;" title="Sistema Online e Operante"></span>
-          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 45.0 (Bkp 45)</span>
+          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">Versão 46.0 (Bkp 46)</span>
         </div>
       </footer>
 
@@ -3392,8 +3423,9 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=45.0"></script>
-  <script src="admin.js?v=45.0"></script>
-  <script src="pwa.js?v=45.0"></script>
+  <script src="shared-data.js?v=46.0"></script>
+  <script src="vip-web-printer.js?v=46.0"></script>
+  <script src="admin.js?v=46.0"></script>
+  <script src="pwa.js?v=46.0"></script>
 </body>
 </html>

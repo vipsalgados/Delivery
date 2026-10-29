@@ -3095,138 +3095,34 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
 }
 
 window.printOrderReceipt = async function(orderId, isAutoPrint = false, event = null) {
+  if (window.VIPWebPrinter && typeof window.VIPWebPrinter.printOrderReceipt === "function") {
+    return await window.VIPWebPrinter.printOrderReceipt(orderId, isAutoPrint, event);
+  }
+  // Fallback nativo direto se o módulo ainda estiver carregando
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
-
-  // Se já foi impresso e for disparo automático de novo pedido, não imprime duplicado
-  if (isAutoPrint && (order.printed || order.printedAt)) {
-    return;
-  }
-
   const cfg = VIPDatabase.getConfig();
   const printerCfg = VIPDatabase.getPrinterConfig();
-  const numCopies = printerCfg.copies || 1;
-  const textReceipt = buildOrderTextReceipt(order, cfg, printerCfg);
-
-  // 1. TENTA PRIMEIRO O SERVIÇO DE IMPRESSÃO DIRETA LOCAL DO WINDOWS (PORTA 18181 - ZERO JANELAS)
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1200);
-
-    const token = (window.VIPWhatsAppGateway && typeof window.VIPWhatsAppGateway.getLocalAuthToken === "function")
-      ? await window.VIPWhatsAppGateway.getLocalAuthToken()
-      : (localStorage.getItem("salgados_vip_wa_local_token") || "");
-
-    const headers = { "Content-Type": "application/json" };
-    if (token) headers["X-VIP-Token"] = token;
-
-    const response = await fetch("http://127.0.0.1:18181/print", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        orderId: order.id,
-        receiptText: textReceipt,
-        copies: numCopies,
-        printerName: printerCfg.printerTarget || "windows_default"
-      }),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const data = await response.json();
-      if (data.success) {
-        VIPDatabase.markOrderPrinted(orderId);
-        renderLiveOrders();
-        checkPrintAgentStatus();
-        console.log(`[OK] Pedido #${order.id} impresso diretamente na impressora local sem diálogos.`);
-        if (typeof showToastNotification === "function" && !isAutoPrint) {
-          showToastNotification(`✓ Pedido #${order.id} impresso diretamente na impressora!`);
-        }
-        return;
-      }
-    }
-  } catch (agentErr) {
-    // Computador atual não tem o spooler local ou está acessando remotamente
-  }
-
-  // 2. SE NÃO TEM SPOOLER NESTE DISPOSITIVO (ex: acessando de notebook, celular ou outro PC):
-  // Envia ordem de impressão silenciosa para a Nuvem Supabase para a impressora da loja imprimir diretamente!
-  try {
-    const sb = typeof getSupabaseClient === "function" ? getSupabaseClient() : null;
-    if (sb) {
-      await sb.from("orders").update({
-        printed: false,
-        updated_at: new Date().toISOString()
-      }).eq("id", order.id);
-
-      await sb.from("store_settings").upsert({
-        id: "print_queue",
-        value: {
-          orderId: order.id,
-          receiptText: textReceipt,
-          copies: numCopies,
-          requestedAt: Date.now(),
-          requestedBy: "Painel Web Remoto"
-        },
-        updated_at: new Date().toISOString()
-      });
-
-      VIPDatabase.markOrderPrinted(orderId);
-      renderLiveOrders();
-      console.log(`[OK] Pedido #${order.id} enfileirado na nuvem para impressão na loja.`);
-      if (typeof showToastNotification === "function") {
-        showToastNotification(`✓ Pedido #${order.id} enviado para a impressora da loja!`);
-      }
-      return;
-    }
-  } catch (cloudErr) {
-    console.warn("[Cloud Print] Falha ao enfileirar impressão na nuvem:", cloudErr);
-  }
-
-  // REGRA CRÍTICA DEFINITIVA (ZERO JANELAS / ZERO INTERRUPÇÕES):
-  // Se for disparo automático (isAutoPrint), NUNCA abre janela nativa de impressão (window.print())
-  // para não travar o computador do operador com caixas de diálogo!
-  if (isAutoPrint) {
-    return;
-  }
-
-  // 3. APENAS SE O OPERADOR CLICOU MANUALMENTE COM TECLA SHIFT OU EM MODO KIOSK EXPLÍCITO:
-  const isShiftPressed = event && event.shiftKey;
-  if (!isShiftPressed) {
-    // Feedback amigável sem abrir janela
-    if (typeof showToastNotification === "function") {
-      showToastNotification(`✓ Ordem de impressão enviada para o computador da loja!`);
-    }
-    return;
-  }
-
-  // Renderização HTML compacta de 1 única página se exigido
+  const textReceipt = (typeof buildOrderTextReceipt === "function") ? buildOrderTextReceipt(order, cfg, printerCfg) : "";
   const receiptArea = document.getElementById("thermal-receipt-area");
-  if (!receiptArea) return;
-  const paperClass = printerCfg.paperWidth === "58mm" ? "paper-58mm" : "paper-80mm";
-  receiptArea.className = `thermal-receipt-area ${paperClass}`;
-  receiptArea.innerHTML = `
-    <div class="receipt-copy" style="font-family:monospace; font-size:10pt; line-height:1.2; padding:2mm 0; max-width:76mm; margin:0 auto;">
-      <pre style="margin:0; font-family:monospace; font-size:10pt; white-space:pre-wrap; word-break:break-word;">${textReceipt}</pre>
-    </div>
-  `;
-
+  if (receiptArea) {
+    receiptArea.className = "thermal-receipt-area paper-80mm";
+    receiptArea.innerHTML = `<div class="receipt-copy" style="font-family:monospace; font-size:10pt; line-height:1.2; padding:2mm 0; max-width:76mm; margin:0 auto;"><pre style="margin:0; font-family:monospace; font-size:10pt; white-space:pre-wrap; word-break:break-word;">${textReceipt}</pre></div>`;
+  }
   VIPDatabase.markOrderPrinted(orderId);
   renderLiveOrders();
-  setTimeout(() => {
-    window.print();
-  }, 150);
+  setTimeout(() => { window.print(); }, 120);
 };
 
 // Teste de impressão rápida a partir das configurações
 window.testThermalPrint = function() {
-  const orders = VIPDatabase.getOrders();
-  if (orders.length > 0) {
-    printOrderReceipt(orders[0].id, false);
+  if (window.VIPWebPrinter && typeof window.VIPWebPrinter.testCurrentPrinter === "function") {
+    window.VIPWebPrinter.testCurrentPrinter();
   } else {
-    simulateNewOrder();
+    const orders = VIPDatabase.getOrders();
+    if (orders.length > 0) printOrderReceipt(orders[0].id, false);
+    else simulateNewOrder();
   }
 };
 
@@ -5872,7 +5768,9 @@ function populatePrinterSettings(force = false) {
   if (silentEl && (force || document.activeElement !== silentEl)) silentEl.checked = pCfg.silentPrintMode !== false;
   if (soundEl && (force || document.activeElement !== soundEl)) soundEl.checked = pCfg.soundAlert !== false;
   if (autoCutEl && (force || document.activeElement !== autoCutEl)) autoCutEl.checked = pCfg.autoCutPaper !== false;
-  if (targetEl && (force || document.activeElement !== targetEl)) targetEl.value = pCfg.printerTarget || "windows_default";
+  const activeTarget = (window.VIPWebPrinter ? window.VIPWebPrinter.getLocalTarget() : (pCfg.printerTarget || "windows_default"));
+  if (targetEl && (force || document.activeElement !== targetEl)) targetEl.value = activeTarget;
+  if (window.VIPWebPrinter) window.VIPWebPrinter.updateUiStatus();
   if (paperEl && (force || document.activeElement !== paperEl)) paperEl.value = pCfg.paperWidth || "80mm";
   if (copiesEl && (force || document.activeElement !== copiesEl)) copiesEl.value = String(pCfg.copies || 1);
   if (prepTimeEl && (force || document.activeElement !== prepTimeEl)) prepTimeEl.value = pCfg.targetPrepTimeMinutes || 35;
@@ -10411,7 +10309,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v45.0 (Bkp 45)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v46.0 (Bkp 46)";
   }
 
   setTimeout(() => {
