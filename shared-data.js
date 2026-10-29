@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v46.0 (Bkp 46)";
+window.VIP_APP_VERSION = "v47.0 (Bkp 47)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -1514,6 +1514,7 @@ const VIPDatabase = {
     const order = orders.find(o => (o.id === orderId || o.orderId === orderId));
     if (order) {
       order.status = newStatus;
+      order.updatedAt = Date.now();
       if (extraData && typeof extraData === "object") {
         Object.assign(order, extraData);
       }
@@ -1529,7 +1530,7 @@ const VIPDatabase = {
     const orders = this.getOrders();
     const idx = orders.findIndex(o => (o.id === updatedOrder.id || o.orderId === updatedOrder.id));
     if (idx >= 0) {
-      orders[idx] = { ...orders[idx], ...updatedOrder };
+      orders[idx] = { ...orders[idx], ...updatedOrder, updatedAt: Date.now() };
       this.saveOrders(orders);
       return orders[idx];
     }

@@ -1050,6 +1050,7 @@ tr.table-row-draggable.drag-over-below {
 }
 
 /* Modais */
+/* Modais & Blindagem contra cliques fantasmas */
 .adm-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -1061,9 +1062,18 @@ tr.table-row-draggable.drag-over-below {
   transition: opacity 0.2s;
 }
 
+.adm-modal-backdrop:not(.active) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 .adm-modal-backdrop.active {
-  opacity: 1;
-  pointer-events: auto;
+  display: block !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 .adm-modal {
@@ -1083,10 +1093,23 @@ tr.table-row-draggable.drag-over-below {
   transition: all 0.2s ease;
 }
 
+.adm-modal:not(.active) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
 .adm-modal.active {
-  transform: translate(-50%, -50%) scale(1);
-  opacity: 1;
-  pointer-events: auto;
+  display: block !important;
+  transform: translate(-50%, -50%) scale(1) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+}
+
+.adm-modal.modal-order-large.active {
+  display: flex !important;
 }
 
 .adm-modal-header {

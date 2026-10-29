@@ -403,7 +403,21 @@ initPanoramicBodyCurtainListener();
 // ==========================================
 // 2. NAVEGAÇÃO DE ABAS DO PAINEL (MENU LATERAL)
 // ==========================================
+// Registro em memória de pedidos operados na sessão (garante que nunca sumam no Kanban)
+window._sessionOperatedOrderIds = window._sessionOperatedOrderIds || new Set();
+function registerSessionOperatedOrder(orderId) {
+  if (!orderId) return;
+  if (!window._sessionOperatedOrderIds) {
+    window._sessionOperatedOrderIds = new Set();
+  }
+  window._sessionOperatedOrderIds.add(String(orderId));
+}
 window.switchTab = function(targetTab) {
+  // Fecha imediatamente qualquer modal aberto para evitar camadas fantasmas
+  if (typeof closeOrderModal === "function") closeOrderModal();
+  if (typeof closeWhatsAppNotifyModal === "function") closeWhatsAppNotifyModal();
+  if (typeof closeDispatchMotoboyModal === "function") closeDispatchMotoboyModal();
+
   const btn = document.querySelector(`.adm-tab-btn[data-tab="${targetTab}"]`);
   if (btn) {
     btn.click();
@@ -412,11 +426,19 @@ window.switchTab = function(targetTab) {
     document.querySelectorAll(".adm-tab-pane").forEach(p => p.classList.remove("active"));
     const pane = document.getElementById(`tab-${targetTab}`);
     if (pane) pane.classList.add("active");
+    if (targetTab === "orders" && typeof renderLiveOrders === "function") {
+      renderLiveOrders();
+    }
   }
 };
 
 document.querySelectorAll(".adm-tab-btn").forEach(btn => {
   btn.addEventListener("click", () => {
+    // Fecha imediatamente qualquer modal aberto para blindar contra sobreposição
+    if (typeof closeOrderModal === "function") closeOrderModal();
+    if (typeof closeWhatsAppNotifyModal === "function") closeWhatsAppNotifyModal();
+    if (typeof closeDispatchMotoboyModal === "function") closeDispatchMotoboyModal();
+
     document.querySelectorAll(".adm-tab-btn").forEach(b => b.classList.remove("active"));
     document.querySelectorAll(".adm-tab-pane").forEach(p => p.classList.remove("active"));
 
@@ -428,6 +450,12 @@ document.querySelectorAll(".adm-tab-btn").forEach(btn => {
     // Fecha a cortina no mobile automaticamente ao clicar no item
     if (window.innerWidth <= 992) {
       toggleSidebarMenu(false);
+    }
+
+    if (target === "orders") {
+      if (typeof renderLiveOrders === "function") {
+        renderLiveOrders();
+      }
     }
 
     if (target === "caixa") {
@@ -1053,12 +1081,17 @@ function getMotoboyPaymentInfo(order) {
 let currentOrdersDateFilter = "hoje"; // 'hoje' ou 'todos'
 let onlyDelayedOrdersFilter = false;
 
-// Verifica se o pedido pertence ao dia de hoje
+// Verifica se o pedido pertence ao dia de hoje (com blindagem contra sumiço ao concluir)
 function isOrderFromToday(order) {
   if (!order) return false;
 
-  // REGRA CRÍTICA: Pedidos ativos em aberto (novo, em_preparo, pronto) DEVEM sempre aparecer no Kanban para a cozinha não perder!
+  // 1. REGRA ABSOLUTA: Pedidos ativos em aberto (novo, em_preparo, pronto) DEVEM sempre aparecer no Kanban para a cozinha não perder!
   if (order.status === "novo" || order.status === "em_preparo" || order.status === "pronto") {
+    return true;
+  }
+
+  // 2. Pedidos que foram operados, inspecionados ou modificados na sessão atual do navegador
+  if (window._sessionOperatedOrderIds && window._sessionOperatedOrderIds.has(String(order.id || order.orderId))) {
     return true;
   }
 
@@ -1067,24 +1100,37 @@ function isOrderFromToday(order) {
   const month = now.getMonth();
   const date = now.getDate();
 
-  // Pedidos agendados para a data de hoje
+  const isSameDay = (tsOrIso) => {
+    if (!tsOrIso) return false;
+    const d = new Date(tsOrIso);
+    if (isNaN(d.getTime())) return false;
+    return d.getFullYear() === year && d.getMonth() === month && d.getDate() === date;
+  };
+
+  // 3. Pedidos agendados para a data de hoje
   if (order.timingType === "agendado" && order.scheduledDate) {
     const todayISO = `${year}-${String(month + 1).padStart(2, '0')}-${String(date).padStart(2, '0')}`;
     if (order.scheduledDate === todayISO) return true;
   }
 
-  // Pedidos criados hoje
-  if (order.createdAt) {
-    const d = new Date(order.createdAt);
-    if (!isNaN(d.getTime())) {
-      if (d.getFullYear() === year && d.getMonth() === month && d.getDate() === date) {
-        return true;
-      }
+  // 4. Pedidos criados hoje
+  if (isSameDay(order.createdAt)) return true;
+
+  // 5. Pedidos atualizados ou com status modificado hoje
+  if (isSameDay(order.updatedAt)) return true;
+
+  // 6. Pedidos cujo histórico de alterações possui qualquer etapa ocorrida hoje
+  if (Array.isArray(order.history)) {
+    for (const h of order.history) {
+      if (isSameDay(h.time || h.timestamp)) return true;
     }
   }
 
-  // Se o pedido não tiver timestamps ou data explícita, exibe por segurança
-  if (!order.createdAt && !order.scheduledDate) return true;
+  // 7. Pedidos impressos hoje
+  if (isSameDay(order.printedAt)) return true;
+
+  // 8. Se o pedido não tiver timestamps ou data explícita, exibe por segurança
+  if (!order.createdAt && !order.scheduledDate && !order.updatedAt) return true;
 
   return false;
 }
@@ -1141,6 +1187,7 @@ window.scrollKanbanTo = function(stage) {
 
 window.revertOrderStatus = function(orderId, event) {
   if (event) event.stopPropagation();
+  registerSessionOperatedOrder(orderId);
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId));
   if (!order) return;
@@ -2531,6 +2578,7 @@ window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
 // Avanço rápido de status pelo card
 window.advanceOrderStatus = async function(orderId, event) {
   if (event) event.stopPropagation();
+  registerSessionOperatedOrder(orderId);
 
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => o.id === orderId);
@@ -2589,6 +2637,7 @@ window.openOrderDetails = function(orderId, event) {
     event.stopPropagation();
   }
   activeModalOrderId = orderId;
+  registerSessionOperatedOrder(orderId);
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => String(o.id) === String(orderId) || String(o.orderId) === String(orderId));
   if (!order) {
@@ -2923,11 +2972,17 @@ window.openOrderDetails = function(orderId, event) {
   const btnPrint = document.getElementById("btn-modal-print-order");
   btnPrint.onclick = () => printOrderReceipt(order.id, false);
 
-  // Abrir Modal
+  // Abrir Modal de forma garantida
     const backdropEl = document.getElementById("modal-order-backdrop");
     const modalEl = document.getElementById("modal-order");
-    if (backdropEl) backdropEl.classList.add("active");
-    if (modalEl) modalEl.classList.add("active");
+    if (backdropEl) {
+      backdropEl.style.display = "block";
+      backdropEl.classList.add("active");
+    }
+    if (modalEl) {
+      modalEl.style.display = "flex";
+      modalEl.classList.add("active");
+    }
   } catch (err) {
     console.error("[openOrderDetails] Erro ao carregar detalhes do pedido:", err);
     if (typeof showToastNotification === "function") {
@@ -2939,6 +2994,7 @@ window.openOrderDetails = function(orderId, event) {
 };
 
 window.setOrderStatus = async function(orderId, newStatus) {
+  registerSessionOperatedOrder(orderId);
   VIPDatabase.updateOrderStatus(orderId, newStatus);
   renderLiveOrders();
   if (activeModalOrderId === orderId) {
@@ -2977,8 +3033,16 @@ window.setOrderStatus = async function(orderId, newStatus) {
 
 window.closeOrderModal = function() {
   activeModalOrderId = null;
-  document.getElementById("modal-order-backdrop").classList.remove("active");
-  document.getElementById("modal-order").classList.remove("active");
+  const backdropEl = document.getElementById("modal-order-backdrop");
+  const modalEl = document.getElementById("modal-order");
+  if (backdropEl) {
+    backdropEl.classList.remove("active");
+    backdropEl.style.display = "none";
+  }
+  if (modalEl) {
+    modalEl.classList.remove("active");
+    modalEl.style.display = "none";
+  }
 };
 
 // ==============================================================================
@@ -10309,7 +10373,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v46.0 (Bkp 46)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v47.0 (Bkp 47)";
   }
 
   setTimeout(() => {
