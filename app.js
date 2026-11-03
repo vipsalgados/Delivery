@@ -2374,18 +2374,25 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
   // 5. Exibe confirmação visual de sucesso
   showToastNotification(`Pedido #${savedOrder.id} finalizado com sucesso!`);
 
-  // 6. Abre o WhatsApp com a mensagem do pedido (sem travar a tela da loja)
-  const waUrl = `https://wa.me/${cfg.whatsappNumber}?text=${encodeURIComponent(msg)}`;
+  // 6. Abre o WhatsApp com a mensagem do pedido (infraestrutura blindada VIPWhatsApp)
+  const waUrl = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Link.buildStoreOrderUrl === "function")
+    ? window.VIPWhatsApp.Link.buildStoreOrderUrl(msg, cfg)
+    : `https://wa.me/${String(cfg.whatsappNumber || "5521986758102").replace(/\D/g, "")}?text=${encodeURIComponent(msg)}`;
+
   setTimeout(() => {
-    try {
-      const waWindow = window.open(waUrl, "_blank");
-      if (!waWindow || waWindow.closed || typeof waWindow.closed === "undefined") {
+    if (window.VIPWhatsApp && typeof window.VIPWhatsApp.open === "function") {
+      window.VIPWhatsApp.open(waUrl, { title: "Enviar Pedido via WhatsApp" });
+    } else {
+      try {
+        const waWindow = window.open(waUrl, "_blank");
+        if (!waWindow || waWindow.closed || typeof waWindow.closed === "undefined") {
+          window.location.href = waUrl;
+        }
+      } catch (e) {
         window.location.href = waUrl;
       }
-    } catch (e) {
-      window.location.href = waUrl;
     }
-  }, 100);
+  }, 60);
 });
 
 // Toast Feedback Helper

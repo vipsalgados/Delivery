@@ -1534,8 +1534,12 @@ function renderKanbanCard(order, catsCache, prodsCache) {
   let motoboyTagHtml = "";
   if (isDelivery) {
     if (order.deliveryMan) {
-      const cleanPhone = (order.deliveryMan.phone || "").replace(/\D/g, "");
-      const waLink = cleanPhone ? `https://wa.me/55${cleanPhone}` : "javascript:void(0)";
+      const cleanPhone = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Phone.normalize === "function")
+        ? window.VIPWhatsApp.Phone.normalize(order.deliveryMan.phone)
+        : (order.deliveryMan.phone || "").replace(/\D/g, "");
+      const waLink = cleanPhone
+        ? ((window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function") ? window.VIPWhatsApp.buildUrl(cleanPhone) : `https://wa.me/${cleanPhone}`)
+        : "javascript:void(0)";
       motoboyTagHtml = `
         <div class="kanban-motoboy-badge" onclick="event.stopPropagation(); openDispatchMotoboyModal('${order.id}')" title="Clique para trocar o motoboy">
           <i class="fa-solid fa-motorcycle"></i>
@@ -2277,9 +2281,13 @@ window.showToastNotification = function(text, options = {}) {
   }, duration);
 };
 
-// Abrir modal de notificação
+// Abrir modal de notificação (infraestrutura blindada VIPWhatsApp)
 window.openWhatsAppNotifyModal = function(orderId, event, preferredTemplateKey) {
   if (event) event.stopPropagation();
+  if (window.VIPWhatsApp && typeof window.VIPWhatsApp.openModal === "function") {
+    window.VIPWhatsApp.openModal(orderId, preferredTemplateKey);
+    return;
+  }
 
   activeWhatsAppNotifyOrderId = orderId;
   const orders = VIPDatabase.getOrders();
@@ -2331,8 +2339,21 @@ window.openWhatsAppNotifyModal = function(orderId, event, preferredTemplateKey) 
 
 window.closeWhatsAppNotifyModal = function() {
   activeWhatsAppNotifyOrderId = null;
-  document.getElementById("modal-whatsapp-notify-backdrop").classList.remove("active");
-  document.getElementById("modal-whatsapp-notify").classList.remove("active");
+  if (window.VIPWhatsApp && typeof window.VIPWhatsApp.closeModal === "function") {
+    window.VIPWhatsApp.closeModal();
+  }
+  const backdrop = document.getElementById("modal-whatsapp-notify-backdrop");
+  const modal = document.getElementById("modal-whatsapp-notify");
+  if (backdrop) {
+    backdrop.classList.remove("active");
+    backdrop.style.display = "none";
+    backdrop.style.visibility = "hidden";
+  }
+  if (modal) {
+    modal.classList.remove("active");
+    modal.style.display = "none";
+    modal.style.visibility = "hidden";
+  }
 };
 
 // Renderizar chips de seleção de template
@@ -2427,6 +2448,9 @@ window.copyWhatsAppNotificationText = function() {
 
 // Disparar envio de notificação (Híbrido e Seguro: silencioso prioritário, fallback wa.me garantido)
 window.triggerSendWhatsAppNotification = async function() {
+  if (window.VIPWhatsApp && typeof window.VIPWhatsApp.triggerSend === "function") {
+    return await window.VIPWhatsApp.triggerSend();
+  }
   const orderId = activeWhatsAppNotifyOrderId;
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => o.id === orderId);
@@ -2526,6 +2550,9 @@ window.triggerSendWhatsAppNotification = async function() {
 
 // Envio rápido com 1 clique (usado dentro do modal de detalhes do pedido)
 window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
+  if (window.VIPWhatsApp && typeof window.VIPWhatsApp.quickSend === "function") {
+    return await window.VIPWhatsApp.quickSend(orderId, templateKey);
+  }
   const orders = VIPDatabase.getOrders();
   const order = orders.find(o => o.id === orderId);
   if (!order) return;
@@ -2678,10 +2705,11 @@ window.openOrderDetails = function(orderId, event) {
     day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"
   });
 
-  const rawPhone = (order.customer?.phone || "").replace(/\D/g, "");
-  const waPhone = rawPhone.length <= 11 ? `55${rawPhone}` : rawPhone;
-  const waText = encodeURIComponent(`Olá ${order.customer?.name || ""}! Aqui é do Salgados VIP Nova Iguaçu referente ao seu Pedido #${order.id}.`);
-  const waLink = rawPhone ? `https://wa.me/${waPhone}?text=${waText}` : null;
+  const rawPhone = order.customer?.phone || "";
+  const waText = `Olá ${order.customer?.name || ""}! Aqui é do Salgados VIP Nova Iguaçu referente ao seu Pedido #${order.id}.`;
+  const waLink = (window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function")
+    ? (window.VIPWhatsApp.Phone.isValid(rawPhone) ? window.VIPWhatsApp.buildUrl(rawPhone, waText) : null)
+    : (rawPhone ? `https://wa.me/${rawPhone.replace(/\D/g, "")}?text=${encodeURIComponent(waText)}` : null);
 
   // Detalhamento dos itens
   let itemsBreakdownHtml = "";
@@ -8230,8 +8258,12 @@ window.renderMotoboysView = function() {
   } else {
     grid.innerHTML = filtered.map(m => {
       const st = statsByMotoboy[m.id] || { runsCount: 0, totalFees: 0, cashCollected: 0 };
-      const cleanPhone = (m.phone || "").replace(/\D/g, "");
-      const waLink = cleanPhone ? `https://wa.me/55${cleanPhone}` : "javascript:void(0)";
+      const cleanPhone = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Phone.normalize === "function")
+        ? window.VIPWhatsApp.Phone.normalize(m.phone)
+        : (m.phone || "").replace(/\D/g, "");
+      const waLink = cleanPhone
+        ? ((window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function") ? window.VIPWhatsApp.buildUrl(cleanPhone) : `https://wa.me/${cleanPhone}`)
+        : "javascript:void(0)";
       const isPaused = !m.active;
 
       // Escala de dias da semana
@@ -8388,8 +8420,12 @@ function renderMotoboysTodayRunsTable(todayOrders) {
 
   tbody.innerHTML = runs.map(o => {
     const timeStr = o.createdAt ? new Date(o.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--";
-    const cleanPhone = (o.deliveryMan?.phone || "").replace(/\D/g, "");
-    const waLink = cleanPhone ? `https://wa.me/55${cleanPhone}` : "javascript:void(0)";
+    const cleanPhone = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Phone.normalize === "function")
+        ? window.VIPWhatsApp.Phone.normalize(o.deliveryMan?.phone)
+        : (o.deliveryMan?.phone || "").replace(/\D/g, "");
+    const waLink = cleanPhone
+        ? ((window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function") ? window.VIPWhatsApp.buildUrl(cleanPhone) : `https://wa.me/${cleanPhone}`)
+        : "javascript:void(0)";
     const feeVal = Number(o.deliveryMan?.fee || 7);
     const totalVal = Number(o.totalAmount || 0);
 
@@ -8856,7 +8892,12 @@ window.confirmDispatchMotoboy = async function() {
       }
 
       if (!sentSilently) {
-        window.open(`https://wa.me/55${cleanPhone}?text=${encodeURIComponent(waMsg)}`, "_blank");
+        if (window.VIPWhatsApp && typeof window.VIPWhatsApp.open === "function") {
+          const waUrl = window.VIPWhatsApp.buildUrl(cleanPhone, waMsg);
+          window.VIPWhatsApp.open(waUrl, { title: "Enviar Rota para o Motoboy" });
+        } else {
+          window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(waMsg)}`, "_blank");
+        }
       }
     }
   }
@@ -9916,8 +9957,12 @@ window.renderCustomersCRMView = function() {
       <span class="badge-crm-tag" title="${f.qty}x pedidos">${f.name} (${f.qty}x)</span>
     `).join(" ") || '<span style="color:#94a3b8; font-size:0.75rem;">--</span>';
 
-    const cleanPhone = (c.phone || "").replace(/\D/g, "");
-    const waLink = cleanPhone ? `https://wa.me/55${cleanPhone}` : "javascript:void(0)";
+    const cleanPhone = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Phone.normalize === "function")
+        ? window.VIPWhatsApp.Phone.normalize(c.phone)
+        : (c.phone || "").replace(/\D/g, "");
+    const waLink = cleanPhone
+        ? ((window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function") ? window.VIPWhatsApp.buildUrl(cleanPhone) : `https://wa.me/${cleanPhone}`)
+        : "javascript:void(0)";
 
     return `
       <tr>
@@ -10315,8 +10360,17 @@ window.sendCustomerWAMessage = async function() {
   }
 
   if (!sentSilently) {
-    const waUrl = `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
-    window.open(waUrl, "_blank");
+    const normPhone = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Phone.normalize === "function")
+      ? window.VIPWhatsApp.Phone.normalize(phone)
+      : phone.replace(/\D/g, "");
+    const waUrl = (window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function")
+      ? window.VIPWhatsApp.buildUrl(normPhone, text)
+      : `https://wa.me/${normPhone}?text=${encodeURIComponent(text)}`;
+    if (window.VIPWhatsApp && typeof window.VIPWhatsApp.open === "function") {
+      window.VIPWhatsApp.open(waUrl, { title: "Mensagem para o Cliente" });
+    } else {
+      window.open(waUrl, "_blank");
+    }
   }
 
   closeCustomerWAModal();
@@ -10373,7 +10427,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v47.0 (Bkp 47)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v48.0 (Bkp 48)";
   }
 
   setTimeout(() => {

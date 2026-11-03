@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v47.0 (Bkp 47)";
+window.VIP_APP_VERSION = "v48.0 (Bkp 48)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -1015,8 +1015,11 @@ const VIPWhatsAppNotifier = {
     return norm.length >= 12; // 55 + 2 digitos DDD + 8 ou 9 digitos
   },
 
-  // Gera o link direto wa.me com texto devidamente codificado para URL
+  // Gera o link direto wa.me com texto devidamente codificado para URL (delegado ao VIPWhatsApp)
   buildWhatsAppUrl(phone, text) {
+    if (typeof window !== "undefined" && window.VIPWhatsApp && typeof window.VIPWhatsApp.buildUrl === "function") {
+      return window.VIPWhatsApp.buildUrl(phone, text);
+    }
     const normPhone = this.normalizePhone(phone);
     if (!normPhone) return null;
     return `https://wa.me/${normPhone}?text=${encodeURIComponent(text)}`;
@@ -1204,6 +1207,14 @@ const VIPDatabase = {
     }
     if (!cfg.pixCity) {
       cfg.pixCity = DEFAULT_CONFIG.pixCity;
+    }
+    if (cfg.whatsappNumber) {
+      cfg.whatsappNumber = (typeof window !== "undefined" && window.VIPWhatsApp && window.VIPWhatsApp.Phone)
+        ? window.VIPWhatsApp.Phone.normalize(cfg.whatsappNumber)
+        : String(cfg.whatsappNumber).replace(/\D/g, "");
+    }
+    if (!cfg.whatsappNumber) {
+      cfg.whatsappNumber = DEFAULT_CONFIG.whatsappNumber;
     }
     return cfg;
   },

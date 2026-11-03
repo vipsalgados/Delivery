@@ -2671,6 +2671,28 @@ tr.table-row-draggable.drag-over-below {
 /* ==============================================================================
    MODAL DE NOTIFICAÇÕES WHATSAPP
    ============================================================================== */
+#modal-whatsapp-notify-backdrop {
+  z-index: 2100 !important;
+}
+
+#modal-whatsapp-notify {
+  z-index: 2101 !important;
+}
+
+#modal-whatsapp-notify.active {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#modal-whatsapp-notify-backdrop.active {
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
 .modal-whatsapp-dialog {
   max-width: 620px;
   width: 95%;
