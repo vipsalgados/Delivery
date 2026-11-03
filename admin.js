@@ -5905,6 +5905,9 @@ function populatePrinterSettings(force = false) {
 
 // Pré-visualização Dinâmica Ao Vivo do Cupom Térmico
 window.updatePrinterLivePreview = function() {
+  if (window.VIPThermalPrinter && typeof window.VIPThermalPrinter.updateLivePreview === "function") {
+    return window.VIPThermalPrinter.updateLivePreview();
+  }
   const previewBox = document.getElementById("printer-live-preview-box");
   if (!previewBox) return;
 
@@ -10445,7 +10448,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v49.0 (Bkp 49)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v50.0 (Bkp 50)";
   }
 
   setTimeout(() => {

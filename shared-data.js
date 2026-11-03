@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v49.0 (Bkp 49)";
+window.VIP_APP_VERSION = "v50.0 (Bkp 50)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {

@@ -3406,7 +3406,15 @@ tr.table-row-draggable.drag-over-below {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
     margin-bottom: 0 !important;
-    padding-bottom: 2mm !important;
+    padding-bottom: 0 !important;
+  }
+  .receipt-cut-line {
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    margin: 3mm 0 0 0 !important;
+    padding: 1mm 0 0 0 !important;
   }
 }
 
@@ -3567,12 +3575,16 @@ tr.table-row-draggable.drag-over-below {
 }
 
 .receipt-cut-line {
-  page-break-after: always;
-  break-after: page;
-  border-top: 1px dotted #888;
-  margin: 20px 0;
+  page-break-after: avoid !important;
+  break-after: avoid !important;
+  page-break-before: avoid !important;
+  break-inside: avoid !important;
+  border-top: 1px dashed #666;
+  margin: 4mm 0 0 0 !important;
+  padding: 2mm 0 0 0 !important;
   text-align: center;
   font-size: 8pt;
+  color: #555;
 }
 
   /* ==========================================================================
