@@ -1186,6 +1186,9 @@ window.scrollKanbanTo = function(stage) {
 };
 
 window.revertOrderStatus = function(orderId, event) {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.revertStatus === "function") {
+    return window.VIPLiveOrders.revertStatus(orderId, event);
+  }
   if (event) event.stopPropagation();
   registerSessionOperatedOrder(orderId);
   const orders = VIPDatabase.getOrders();
@@ -1242,6 +1245,9 @@ window.onKanbanDrop = function(event, targetStage) {
 
 // Renderização principal do Quadro Kanban em 4 Colunas (Em uma única tela)
 function renderLiveOrders() {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.render === "function") {
+    return window.VIPLiveOrders.render();
+  }
   const colNovo = document.getElementById("kanban-cards-novo");
   const colPrep = document.getElementById("kanban-cards-em_preparo");
   const colReady = document.getElementById("kanban-cards-pronto");
@@ -2604,6 +2610,9 @@ window.quickSendWhatsAppStatus = async function(orderId, templateKey) {
 
 // Avanço rápido de status pelo card
 window.advanceOrderStatus = async function(orderId, event) {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.advanceStatus === "function") {
+    return await window.VIPLiveOrders.advanceStatus(orderId, event);
+  }
   if (event) event.stopPropagation();
   registerSessionOperatedOrder(orderId);
 
@@ -2660,6 +2669,9 @@ window.advanceOrderStatus = async function(orderId, event) {
 // MODAL DE DETALHES COMPLETOS DO PEDIDO
 // ==============================================================================
 window.openOrderDetails = function(orderId, event) {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.openModal === "function") {
+    return window.VIPLiveOrders.openModal(orderId, event);
+  }
   if (event && typeof event.stopPropagation === "function") {
     event.stopPropagation();
   }
@@ -3022,6 +3034,9 @@ window.openOrderDetails = function(orderId, event) {
 };
 
 window.setOrderStatus = async function(orderId, newStatus) {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.setStatus === "function") {
+    return await window.VIPLiveOrders.setStatus(orderId, newStatus);
+  }
   registerSessionOperatedOrder(orderId);
   VIPDatabase.updateOrderStatus(orderId, newStatus);
   renderLiveOrders();
@@ -3060,6 +3075,9 @@ window.setOrderStatus = async function(orderId, newStatus) {
 };
 
 window.closeOrderModal = function() {
+  if (window.VIPLiveOrders && typeof window.VIPLiveOrders.closeModal === "function") {
+    return window.VIPLiveOrders.closeModal();
+  }
   activeModalOrderId = null;
   const backdropEl = document.getElementById("modal-order-backdrop");
   const modalEl = document.getElementById("modal-order");
@@ -10427,7 +10445,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v48.0 (Bkp 48)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v49.0 (Bkp 49)";
   }
 
   setTimeout(() => {

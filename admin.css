@@ -2912,6 +2912,29 @@ tr.table-row-draggable.drag-over-below {
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  z-index: 2050 !important;
+}
+
+#modal-order {
+  z-index: 2050 !important;
+}
+
+#modal-order-backdrop {
+  z-index: 2049 !important;
+}
+
+#modal-order.active {
+  display: flex !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+#modal-order-backdrop.active {
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
 }
 
 .modal-order-title-box {

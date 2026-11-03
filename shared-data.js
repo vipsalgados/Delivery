@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v48.0 (Bkp 48)";
+window.VIP_APP_VERSION = "v49.0 (Bkp 49)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -3297,3 +3297,7 @@ const VIPDatabase = {
     localStorage.setItem(STORAGE_KEYS.DELIVERY, JSON.stringify(DEFAULT_DELIVERY_CONFIG));
   }
 };
+
+if (typeof window !== 'undefined') {
+  window.VIPDatabase = VIPDatabase;
+}
