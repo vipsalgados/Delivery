@@ -1,7 +1,7 @@
 /**
  * ==============================================================================
  * VIP LIVE ORDERS - SUBSISTEMA AUTÔNOMO DE GESTÃO DE PEDIDOS AO VIVO & KANBAN
- * Salgados VIP Delivery & Cozinha - v50.0 (Bkp 49)
+ * Salgados VIP Delivery & Cozinha - v51.0 (Bkp 49)
  * 
  * Módulo 100% isolado, autônomo e blindado.
  * Garante que cliques em pedidos NUNCA façam o card sumir, protege o modal
@@ -1183,7 +1183,7 @@
   // 5. SUBSISTEMA PRINCIPAL - EXPORTAÇÕES E OPERAÇÕES PÚBLICAS
   // ============================================================================
   const VIPLiveOrders = {
-    VERSION: "v50.0 (Bkp 49)",
+    VERSION: "v51.0 (Bkp 49)",
 
     // Inicialização do módulo
     init() {

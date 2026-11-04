@@ -1,34 +1,24 @@
 /**
  * ==============================================================================
- * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v50.0)
+ * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v51.0)
  * ==============================================================================
  * Módulo 100% Isolado: window.VIPThermalPrinter / window.VIPWebPrinter
  *
- * CARACTERÍSTICAS DE ARQUITETURA & SEGURANÇA:
- * 1. UNIFICAÇÃO TOTAL: A impressão na bobina é 100% IDÊNTICA à Prévia Ao Vivo.
- *    - O mesmo gerador de layout HTML (ReceiptBuilder) alimenta tanto a prévia
- *      quanto o envio para o cabeçote da impressora (#thermal-receipt-area).
- *    - Respeita tipografia (Monospace, Sans-Serif, Condensed).
- *    - Respeita tamanho da letra (Pequena, Média, Grande, Extra Grande).
- *    - Respeita intensidade de negrito (Normal, Negrito, Extra Forte).
- *    - Respeita espaçamento entre linhas e margens milimétricas.
- *    - Renderiza Logotipo com filtro de alto contraste térmico.
- *    - Banners e checklists de Bebidas Geladas.
- *    - Caixas destacadas para o Motoboy (Cobrança, Troco em Dinheiro, Checklist).
- *    - Caixa do PIX com chave e favorecido.
- *    - Sabores detalhados com indicadores ampliados (▶ 40x COXINHA...).
- * 2. ELIMINAÇÃO DA IMPRESSÃO EM 3 PÁGINAS (Página única contínua):
- *    - Remoção estrita de page-break-after: always no marcador de corte.
- *    - Altura fluida auto, quebras de página desativadas para bobina contínua.
- * 3. INDEPENDÊNCIA MULTI-COMPUTADOR (PC 1, PC 2, etc.):
- *    - Alvo de impressão armazenado isoladamente em localStorage por máquina.
- *    - Consulta automática ao Spooler local (porta 18181) para listar impressoras
- *      reais instaladas no Windows e alimentar o seletor no painel admin.
- *    - Suporte nativo a WebUSB direto, WebSerial (COM), e Kiosk Silent Print.
- * 4. BLINDAGEM DE BANCO DE DADOS & EVENTOS:
- *    - Conector seguro getDB().
- *    - Prevenção de impressões duplicadas para pedidos já impressos.
- *    - Retrocompatibilidade global (printOrderReceipt, updatePrinterLivePreview).
+ * CARACTERÍSTICAS DE ARQUITETURA & BLINDAGEM:
+ * 1. IMPRESSÃO SILENCIOSA E DIRETA (ZERO JANELAS / ZERO CONFIRMAÇÕES):
+ *    - Prioridade 1: Spooler Local Windows nativo (Porta 18181 via Agente de Impressão).
+ *      Envia diretamente para a fila de impressão do Windows sem abrir nenhuma caixa de diálogo.
+ *    - Prioridade 2: Conexão Direta WebUSB (ESC/POS no cabo USB sem programas externos).
+ *    - Prioridade 3: Conexão Direta WebSerial (Portas COM / Serial).
+ *    - Prioridade 4: Motor Universal em Iframe Isolado (#vip-printer-iframe), garantindo
+ *      que APENAS o cupom térmico seja impresso e JAMAIS a página ou o card de pedidos.
+ * 2. TRATAMENTO EXPLÍCITO DE 2ª VIA / REIMPRESSÃO:
+ *    - Ao clicar no botão imprimir de um card já registrado, identifica como reimpressão
+ *      e emite o cabeçalho "[ 2ª VIA - REIMPRESSÃO / CONTROLE ]" ou "[ 2ª VIA - CLIENTE ]".
+ * 3. PARIDADE VISUAL RIGOROSA:
+ *    - A impressão na bobina é idêntica à Prévia Ao Vivo das configurações.
+ * 4. PÁGINA ÚNICA CONTÍNUA:
+ *    - Zero quebras de página fantasmas (eliminação definitiva do bug de 3 páginas).
  */
 
 (function () {
@@ -44,6 +34,24 @@
     if (typeof window !== "undefined" && window.VIPDatabase) return window.VIPDatabase;
     if (typeof VIPDatabase !== "undefined") return VIPDatabase;
     return null;
+  }
+
+  // Localiza ou cria dinamicamente o iframe isolado de impressão
+  function getOrCreatePrintIframe() {
+    let iframe = document.getElementById("vip-printer-iframe");
+    if (!iframe) {
+      iframe = document.createElement("iframe");
+      iframe.id = "vip-printer-iframe";
+      iframe.style.position = "fixed";
+      iframe.style.right = "-9999px";
+      iframe.style.bottom = "-9999px";
+      iframe.style.width = "1px";
+      iframe.style.height = "1px";
+      iframe.style.border = "0";
+      iframe.style.visibility = "hidden";
+      document.body.appendChild(iframe);
+    }
+    return iframe;
   }
 
   // ============================================================================
@@ -150,7 +158,7 @@
       };
     },
 
-    // Aplica regras de tipografia no elemento container (seja o preview ou o receipt-area)
+    // Aplica regras de tipografia no elemento container
     applyStylesToElement(el, printerCfg) {
       if (!el) return;
       const t = this.getTypographyStyles(printerCfg);
@@ -168,7 +176,7 @@
     },
 
     // Gera o HTML Completo e Fiel do Cupom Térmico (Idêntico na Prévia e na Bobina)
-    buildHtmlReceipt(order, cfg, printerCfg, copyNum = 1, totalCopies = 1) {
+    buildHtmlReceipt(order, cfg, printerCfg, copyNum = 1, totalCopies = 1, isReprint = false) {
       const storeCfg = cfg || {};
       const pCfg = printerCfg || {};
       const ord = order || {};
@@ -191,9 +199,15 @@
         </div>
       ` : "";
 
-      // 2. Título da Via
+      // 2. Título da Via com identificação clara de 2ª VIA / REIMPRESSÃO
       let viaTitle = "[ 1ª VIA - CONTROLE & COZINHA ]";
-      if (totalCopies > 1) {
+      if (isReprint) {
+        if (totalCopies > 1) {
+          viaTitle = copyNum === 1 ? "[ 1ª VIA - REIMPRESSÃO ]" : "[ 2ª VIA - CLIENTE / REIMPRESSÃO ]";
+        } else {
+          viaTitle = "[ 2ª VIA - REIMPRESSÃO / CONTROLE ]";
+        }
+      } else if (totalCopies > 1) {
         if (copyNum === 1) viaTitle = "[ 1ª VIA - CONTROLE & COZINHA ]";
         else if (copyNum === 2) viaTitle = "[ 2ª VIA - CLIENTE / ENTREGA ]";
         else viaTitle = `[ ${copyNum}ª VIA - ADICIONAL ]`;
@@ -501,8 +515,8 @@
       `;
     },
 
-    // Gera texto ASCII estruturado (utilizado para spooler direto e fallback ESC/POS)
-    buildPlainTextReceipt(order, cfg, printerCfg) {
+    // Gera texto ASCII estruturado (utilizado para spooler direto do Windows e fallback ESC/POS)
+    buildPlainTextReceipt(order, cfg, printerCfg, isReprint = false) {
       const paperWidth = parseInt(printerCfg?.textColumns) || (printerCfg?.paperWidth === "58mm" ? 30 : 40);
       const divider = "=".repeat(paperWidth);
       const thinDivider = "-".repeat(paperWidth);
@@ -532,6 +546,11 @@
       const orderId = order.id || order.orderId || "VIP-DEMO";
       const dateStr = this.formatDateTime(order.createdAt);
       lines.push(line(`PEDIDO #${orderId}`, dateStr));
+
+      if (isReprint) {
+        lines.push(center("*** [ 2a VIA - REIMPRESSAO ] ***"));
+      }
+
       lines.push(line("CLIENTE:", (order.customer?.name || "Cliente").substring(0, 18)));
       if (order.customer?.phone) lines.push(line("CONTATO:", order.customer.phone));
 
@@ -557,7 +576,7 @@
       lines.push(center("[ ITENS DO PEDIDO ]"));
       (order.items || []).forEach((item) => {
         const qty = item.quantity || 1;
-        const name = (item.name || "Item").substring(0, paperWidth - 14);
+        const name = (item.name || item.kitName || "Item").substring(0, paperWidth - 14);
         const price = this.formatMoney(item.totalPrice || item.finalPrice || (item.price ? item.price * qty : 0));
         lines.push(line(`${qty}x ${name}`, price));
 
@@ -600,14 +619,12 @@
     },
 
     // Gera bytes ESC/POS com comandos de cabeçalho, corte e negrito
-    buildEscPosBytes(order, cfg, printerCfg) {
+    buildEscPosBytes(order, cfg, printerCfg, isReprint = false) {
       const ESC = "\x1B";
       const GS = "\x1D";
       let cmd = "";
 
-      // Reset
       cmd += ESC + "@";
-      // Cabeçalho Centralizado Grande
       cmd += ESC + "a\x01";
       cmd += ESC + "E\x01";
       cmd += GS + "!\x11";
@@ -618,14 +635,12 @@
       if (cfg.phone) cmd += "WhatsApp: " + cfg.phone + "\n";
       cmd += "----------------------------------------\n";
 
-      // Conteúdo em texto puro formatado
-      const plainText = this.buildPlainTextReceipt(order, cfg, printerCfg);
-      cmd += ESC + "a\x00"; // alinha esquerda
+      const plainText = this.buildPlainTextReceipt(order, cfg, printerCfg, isReprint);
+      cmd += ESC + "a\x00";
       cmd += plainText;
 
-      // Avanço e Corte de papel
       cmd += "\n\n\n";
-      cmd += GS + "V\x42\x03"; // Cut paper
+      cmd += GS + "V\x42\x03";
 
       return new TextEncoder().encode(cmd);
     }
@@ -670,7 +685,7 @@
       }
 
       // 3. Consultar impressoras reais instaladas no Windows (porta 18181)
-      this.detectSystemPrinters();
+      await this.detectSystemPrinters();
 
       // 4. Atualizar UI e renderizar a prévia ao vivo inicial
       this.updateUiStatus();
@@ -695,7 +710,7 @@
     async detectSystemPrinters() {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 900);
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
 
         const res = await fetch("http://127.0.0.1:18181/status", {
           method: "GET",
@@ -708,14 +723,15 @@
           const data = await res.json();
           this.spoolerOnline = true;
           this.installedSystemPrinters = Array.isArray(data.installedPrinters) ? data.installedPrinters : [];
-          console.log("[VIPThermalPrinter] Spooler Windows detectado online. Impressoras:", this.installedSystemPrinters);
+          console.log("[VIPThermalPrinter] Spooler Windows detectado online. Impressora padrão:", data.defaultPrinter);
           this.populateInstalledPrintersDropdown(data.defaultPrinter);
           this.updateUiStatus();
+          return true;
         }
       } catch (err) {
-        // Spooler não está rodando nesta máquina; utiliza modo nativo universal do navegador
         this.spoolerOnline = false;
       }
+      return false;
     },
 
     // Popula o seletor com as impressoras reais instaladas no Windows deste computador
@@ -820,16 +836,21 @@
           statusBox.innerHTML = `<em>Modo WebUSB selecionado (Nenhuma impressora emparelhada. Clique em 'Conectar').</em>`;
         } else if (localTarget === "webserial") {
           statusBox.innerHTML = `<strong>Conectada (Porta Serial / COM):</strong> Pronta para envio direto ESC/POS.`;
-        } else if (this.spoolerOnline && localTarget !== "windows_default") {
-          statusBox.innerHTML = `<strong>Fila Windows Ativa:</strong> ${localTarget} (Spooler Local 18181).`;
+        } else if (this.spoolerOnline) {
+          statusBox.innerHTML = `<strong>Spooler Windows Ativo (Zero Janelas):</strong> Envio direto para ${localTarget === "windows_default" ? "impressora padrão" : localTarget}.`;
         } else {
-          statusBox.innerHTML = `<strong>Modo Universal:</strong> Impressora padrão deste computador (Zero Janelas / Kiosk).`;
+          statusBox.innerHTML = `<strong>Modo Universal Silencioso:</strong> Impressão direta sem interferência de telas.`;
         }
       }
 
       if (badge) {
-        badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Impressão Universal Ativa`;
-        badge.className = "badge-silent-active";
+        if (this.spoolerOnline) {
+          badge.innerHTML = `<i class="fa-solid fa-bolt"></i> Impressão Silenciosa Direta Ativa`;
+          badge.className = "badge-silent-active";
+        } else {
+          badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Impressão Universal Ativa`;
+          badge.className = "badge-silent-active";
+        }
       }
     },
 
@@ -844,7 +865,6 @@
       const pCfg = db && db.getPrinterConfig ? db.getPrinterConfig() : {};
       const cfg = db && db.getConfig ? db.getConfig() : {};
 
-      // Captura valores dos controles na tela ou da configuração salva
       const activePrinterCfg = {
         fontFamily: document.getElementById("cfg-printer-font-family")?.value || pCfg.fontFamily || "monospace",
         fontSize: document.getElementById("cfg-printer-font-size")?.value || pCfg.fontSize || "medium",
@@ -859,16 +879,13 @@
         printPixDetails: document.getElementById("cfg-printer-show-pix") ? document.getElementById("cfg-printer-show-pix").checked : (pCfg.printPixDetails !== false)
       };
 
-      // Atualiza badge de dimensões na barra da prévia
       const dimBadge = document.getElementById("printer-preview-dimension-badge");
       if (dimBadge) {
         dimBadge.textContent = `Área ${activePrinterCfg.printableWidthMm}mm | Margens ${activePrinterCfg.marginSideMm}mm (Economia Máxima)`;
       }
 
-      // Aplica exatamente os mesmos estilos tipográficos que vão para a bobina
       ReceiptBuilder.applyStylesToElement(previewBox, activePrinterCfg);
 
-      // Pedido Exemplo para a Prévia Ao Vivo
       const sampleOrder = {
         id: "DEMO-108",
         createdAt: Date.now(),
@@ -910,8 +927,7 @@
         notes: "Interfone 201. Tocar e aguardar descer. Salgados bem sequinhos, por favor."
       };
 
-      // Gera o HTML do cupom idêntico ao impresso
-      previewBox.innerHTML = ReceiptBuilder.buildHtmlReceipt(sampleOrder, cfg, activePrinterCfg, 1, 1);
+      previewBox.innerHTML = ReceiptBuilder.buildHtmlReceipt(sampleOrder, cfg, activePrinterCfg, 1, 1, false);
     },
 
     // ==========================================================================
@@ -931,17 +947,17 @@
           return;
         }
 
-        // Se for auto-print e já foi impresso, descarta para evitar duplicidade
-        if (isAutoPrint) {
-          const sessionPrinted = sessionStorage.getItem(PRINTED_ORDERS_SESSION_KEY) || "";
-          if (order.printed || order.printedAt || sessionPrinted.includes(String(order.id))) {
-            return;
-          }
+        // Identifica se é uma 2ª VIA / REIMPRESSÃO
+        const sessionPrinted = (typeof sessionStorage !== "undefined") ? (sessionStorage.getItem(PRINTED_ORDERS_SESSION_KEY) || "") : "";
+        const isReprint = !isAutoPrint && Boolean(order.printed || order.printedAt || sessionPrinted.includes(String(order.id)));
+
+        // Se for auto-print automático repetido e já foi impresso, descarta
+        if (isAutoPrint && (order.printed || order.printedAt || sessionPrinted.includes(String(order.id)))) {
+          return;
         }
 
-        // Registra pedido como impresso na sessão
-        const sessionPrinted = sessionStorage.getItem(PRINTED_ORDERS_SESSION_KEY) || "";
-        if (!sessionPrinted.includes(String(order.id))) {
+        // Registra como impresso na sessão
+        if (typeof sessionStorage !== "undefined" && !sessionPrinted.includes(String(order.id))) {
           sessionStorage.setItem(PRINTED_ORDERS_SESSION_KEY, `${sessionPrinted},${order.id}`);
         }
 
@@ -950,10 +966,44 @@
         const localTarget = this.getLocalTarget();
         const numCopies = Math.max(1, parseInt(printerCfg.copies) || 1);
 
-        // 1. TENTATIVA VIA WEBUSB DIRETO (Se configurado explicitamente)
+        // ----------------------------------------------------------------------
+        // CANAL 1: SPOOLER NATIVO DO WINDOWS (PORTA 18181 - ZERO JANELAS / DIRETO)
+        // ----------------------------------------------------------------------
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+          const plainText = ReceiptBuilder.buildPlainTextReceipt(order, cfg, printerCfg, isReprint);
+          const response = await fetch("http://127.0.0.1:18181/print", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              orderId: order.id,
+              receiptText: plainText,
+              copies: numCopies,
+              printerName: (localTarget === "windows_default") ? null : localTarget
+            }),
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+
+          if (response.ok) {
+            const resData = await response.json();
+            if (resData.success) {
+              this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Spooler Windows" : "Spooler Windows");
+              return;
+            }
+          }
+        } catch (spoolerErr) {
+          // Spooler não respondeu nesta máquina; prossegue para WebUSB ou Motor Iframe
+        }
+
+        // ----------------------------------------------------------------------
+        // CANAL 2: TENTATIVA VIA WEBUSB DIRETO (Zero Programas, Zero Janelas)
+        // ----------------------------------------------------------------------
         if (localTarget === "webusb" && this.pairedUsbDevice) {
           try {
-            const escPosBytes = ReceiptBuilder.buildEscPosBytes(order, cfg, printerCfg);
+            const escPosBytes = ReceiptBuilder.buildEscPosBytes(order, cfg, printerCfg, isReprint);
             if (!this.pairedUsbDevice.opened) await this.pairedUsbDevice.open();
             if (this.pairedUsbDevice.configuration === null) await this.pairedUsbDevice.selectConfiguration(1);
             await this.pairedUsbDevice.claimInterface(0);
@@ -961,62 +1011,149 @@
             for (let c = 0; c < numCopies; c++) {
               await this.pairedUsbDevice.transferOut(endpoint.endpointNumber, escPosBytes);
             }
-            this.finishPrint(order.id, isAutoPrint, "via WebUSB");
+            this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via WebUSB" : "WebUSB");
             return;
           } catch (usbErr) {
             console.warn("[VIPThermalPrinter] Falha WebUSB, recorrendo ao motor universal:", usbErr);
           }
         }
 
-        // 2. TENTATIVA VIA WEBSERIAL DIRETO (Se configurado)
+        // ----------------------------------------------------------------------
+        // CANAL 3: TENTATIVA VIA WEBSERIAL DIRETO (Porta COM / Cabo Serial)
+        // ----------------------------------------------------------------------
         if (localTarget === "webserial" && this.pairedSerialPort) {
           try {
-            const escPosBytes = ReceiptBuilder.buildEscPosBytes(order, cfg, printerCfg);
+            const escPosBytes = ReceiptBuilder.buildEscPosBytes(order, cfg, printerCfg, isReprint);
             if (!this.pairedSerialPort.readable) await this.pairedSerialPort.open({ baudRate: 9600 });
             const writer = this.pairedSerialPort.writable.getWriter();
             for (let c = 0; c < numCopies; c++) {
               await writer.write(escPosBytes);
             }
             writer.releaseLock();
-            this.finishPrint(order.id, isAutoPrint, "via Serial");
+            this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Serial" : "Serial");
             return;
           } catch (serialErr) {
             console.warn("[VIPThermalPrinter] Falha WebSerial, recorrendo ao motor universal:", serialErr);
           }
         }
 
-        // 3. MOTOR UNIVERSAL DO NAVEGADOR (Padrão para qualquer computador, notebook ou tablet)
-        // Renderiza o cupom térmico no HTML dedicado de 1 página contínua com 100% de paridade visual
+        // ----------------------------------------------------------------------
+        // CANAL 4: MOTOR UNIVERSAL EM IFRAME ISOLADO (JAMAIS IMPRIME O CARD OU O PAINEL)
+        // ----------------------------------------------------------------------
+        const stylesObj = ReceiptBuilder.getTypographyStyles(printerCfg);
+        let copiesHtml = "";
+        for (let c = 1; c <= numCopies; c++) {
+          copiesHtml += ReceiptBuilder.buildHtmlReceipt(order, cfg, printerCfg, c, numCopies, isReprint);
+        }
+
+        // 1. Atualiza container padrão do DOM
         const receiptArea = document.getElementById("thermal-receipt-area");
         if (receiptArea) {
-          // Aplica exatamente as mesmas regras visuais da prévia ao vivo
           ReceiptBuilder.applyStylesToElement(receiptArea, printerCfg);
-
-          let copiesHtml = "";
-          for (let c = 1; c <= numCopies; c++) {
-            copiesHtml += ReceiptBuilder.buildHtmlReceipt(order, cfg, printerCfg, c, numCopies);
-          }
           receiptArea.innerHTML = copiesHtml;
         }
 
-        this.finishPrint(order.id, isAutoPrint, "Universal");
-
-        // Disparo de impressão universal do navegador:
-        // Se o navegador estiver com atalho Kiosk (--kiosk-printing) ou SilentPrintingEnabled no Windows,
-        // ele imprime IMEDIATAMENTE e SILENCIOSAMENTE sem nenhuma janela ou confirmação.
-        setTimeout(() => {
-          try {
-            window.print();
-          } catch (pErr) {
-            console.error("[VIPThermalPrinter] Falha ao acionar window.print():", pErr);
-          }
-        }, 80);
+        // 2. Imprime no iframe 100% isolado (blindagem total contra cards ou modais abertos)
+        this.printViaIsolatedIframe(copiesHtml, stylesObj);
+        this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Universal" : "Universal");
 
       } finally {
         setTimeout(() => {
           this.isPrinting = false;
         }, 1200);
       }
+    },
+
+    // Injeta e dispara a impressão a partir do iframe isolado
+    printViaIsolatedIframe(receiptHtml, stylesObj) {
+      const iframe = getOrCreatePrintIframe();
+      if (!iframe || !iframe.contentWindow) {
+        // Fallback no window principal caso o iframe não esteja acessível
+        setTimeout(() => { try { window.print(); } catch (e) {} }, 80);
+        return;
+      }
+
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(`
+        <!DOCTYPE html>
+        <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8">
+          <title>Comanda Salgados VIP</title>
+          <style>
+            @page {
+              size: auto;
+              margin: 0mm !important;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+              width: 100% !important;
+              height: auto !important;
+              min-height: 0 !important;
+              max-height: none !important;
+              overflow: visible !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            #receipt-root {
+              width: ${stylesObj.widthMm}mm;
+              max-width: ${stylesObj.widthMm}mm;
+              margin: 0 auto;
+              padding: 0 ${stylesObj.marginMm}mm;
+              box-sizing: border-box;
+              font-family: ${stylesObj.fontFamily};
+              font-size: ${stylesObj.fontSize};
+              font-weight: ${stylesObj.fontWeight};
+              line-height: ${stylesObj.lineHeight};
+              color: #000000;
+              text-align: left;
+            }
+            .receipt-copy {
+              width: 100%;
+              box-sizing: border-box;
+              margin: 0 auto !important;
+              padding: 0 !important;
+              page-break-after: avoid !important;
+              page-break-before: avoid !important;
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .receipt-cut-line {
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+              page-break-before: avoid !important;
+              break-inside: avoid !important;
+              border-top: 1px dashed #666;
+              margin: 4mm 0 0 0 !important;
+              padding: 2mm 0 0 0 !important;
+              text-align: center;
+              font-size: 8pt;
+              color: #555;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="receipt-root">
+            ${receiptHtml}
+          </div>
+        </body>
+        </html>
+      `);
+      doc.close();
+
+      setTimeout(() => {
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch (pErr) {
+          console.error("[VIPThermalPrinter] Erro no iframe print:", pErr);
+          try { window.print(); } catch (e) {}
+        }
+      }, 100);
     },
 
     // Finalização e gravação de status impresso
@@ -1032,7 +1169,7 @@
 
       console.log(`[VIPThermalPrinter] Pedido #${orderId} impresso (${channelDesc}).`);
       if (typeof window.showToastNotification === "function" && !isAutoPrint) {
-        window.showToastNotification(`✓ Comanda do Pedido #${orderId} enviada para impressão!`);
+        window.showToastNotification(`✓ Comanda do Pedido #${orderId} enviada para impressão (${channelDesc})!`);
       }
     },
 

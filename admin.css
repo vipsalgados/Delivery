@@ -3353,9 +3353,25 @@ tr.table-row-draggable.drag-over-below {
     overflow: visible !important;
   }
 
-  /* Remove COMPLETAMENTE todos os elementos da tela para NUNCA gerar páginas em branco fantasmas */
-  body > *:not(#thermal-receipt-area) {
+  /* Força ocultação TOTAL de qualquer modal, backdrop, card, cabeçalho ou painel */
+  #modal-order,
+  #modal-order.active,
+  #modal-order-backdrop,
+  #modal-order-backdrop.active,
+  .adm-modal,
+  .adm-modal.active,
+  .adm-modal-backdrop,
+  .adm-modal-backdrop.active,
+  .dashboard-wrapper,
+  .login-wrapper,
+  .kanban-board,
+  .kanban-card,
+  .sidebar,
+  .header-actions,
+  body > *:not(#thermal-receipt-area):not(#vip-printer-iframe) {
     display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
   }
 
   /* Exibe exclusivamente a área do cupom térmico ocupando o topo absoluto da impressão */

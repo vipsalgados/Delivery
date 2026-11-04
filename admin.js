@@ -10448,7 +10448,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v50.0 (Bkp 50)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v51.0 (Bkp 51)";
   }
 
   setTimeout(() => {
