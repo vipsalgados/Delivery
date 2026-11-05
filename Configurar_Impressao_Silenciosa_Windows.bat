@@ -12,12 +12,16 @@ echo     deste computador sem abrir nenhuma janela de confirmacao ou previa de i
 echo.
 
 :: Configura no registro do usuario atual (HKCU)
-reg add "HKCU\Software\Policies\Google\Chrome" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
-reg add "HKCU\Software\Policies\Microsoft\Edge" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Policies\Google\Chrome" /v PrintPreviewDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Policies\Google\Chrome" /v PrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Policies\Microsoft\Edge" /v PrintPreviewDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKCU\Software\Policies\Microsoft\Edge" /v PrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
 
 :: Tenta no registro da maquina (HKLM) se tiver permissao de administrador
-reg add "HKLM\Software\Policies\Google\Chrome" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
-reg add "HKLM\Software\Policies\Microsoft\Edge" /v SilentPrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\Software\Policies\Google\Chrome" /v PrintPreviewDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\Software\Policies\Google\Chrome" /v PrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\Software\Policies\Microsoft\Edge" /v PrintPreviewDisabled /t REG_DWORD /d 1 /f >nul 2>&1
+reg add "HKLM\Software\Policies\Microsoft\Edge" /v PrintingEnabled /t REG_DWORD /d 1 /f >nul 2>&1
 
 echo [OK] Politica de Impressao Silenciosa ativada com sucesso!
 echo.

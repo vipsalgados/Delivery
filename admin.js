@@ -6161,114 +6161,257 @@ if (btnSavePrinter) {
   });
 }
 
-window.downloadWindowsSilentPrintLauncher = function() {
+// ============================================================================
+// GERADOR AUTÔNOMO DE ATIVADOR DE IMPRESSÃO SILENCIOSA WINDOWS (ZERO PYTHON)
+// Executável nativo híbrido Batch + PowerShell que funciona em 100% dos PCs
+// ============================================================================
+window.getUniversalSilentPrintBatContent = function(customTitle) {
   const currentUrl = window.location.href.split("#")[0];
-  const batContent = `@echo off
+  const titleText = customTitle || "Salgados VIP - Servico de Impressao Silenciosa (Zero Dialogos)";
+
+  return `@echo off
 chcp 65001 >nul
-title Salgados VIP - Inicializador PDV com Impressao Silenciosa (Zero Dialogos)
-cls
-echo =====================================================================
-echo    SALGADOS VIP - PAINEL ADM COM IMPRESSAO DIRETA SILENCIOSA
-echo =====================================================================
-echo.
-echo [*] 1. Iniciando Agente de Impressao Silenciosa do Windows...
-if exist "%~dp0Servico_Impressao_Silenciosa.bat" (
-    start /min "" cmd /c "%~dp0Servico_Impressao_Silenciosa.bat"
+title ${titleText}
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$script = (Get-Content -LiteralPath '%~f0' | Select-Object -Skip 6) -join [Environment]::NewLine; Invoke-Expression $script"
+exit /b %errorlevel%
+
+# ==============================================================================
+# SALGADOS VIP - MOTOR AUTOMATICO DE IMPRESSAO SILENCIOSA DIRETA (WINDOWS)
+# RODA 100% NATIVO EM QUALQUER WINDOWS 10 / 11 SEM PYTHON E SEM ARQUIVOS EXTERNOS!
+# ==============================================================================
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$appDataDir = Join-Path $env:LOCALAPPDATA "SalgadosVIP"
+if (-not (Test-Path $appDataDir)) { New-Item -ItemType Directory -Path $appDataDir -Force | Out-Null }
+
+Write-Host "=================================================================" -ForegroundColor Green
+Write-Host "   SALGADOS VIP - ATIVADOR DE IMPRESSAO SILENCIOSA (WINDOWS)     " -ForegroundColor Green
+Write-Host "=================================================================" -ForegroundColor Green
+Write-Host ""
+
+# 1. Configurar politicas do Chrome e Edge para desativar a janela de confirmacao de impressao
+Write-Host "[*] 1/4 Configurando politicas do Windows para impressao direta sem janelas..." -ForegroundColor Cyan
+try {
+    $chromePolicy = "HKCU:\Software\Policies\Google\Chrome"
+    if (-not (Test-Path $chromePolicy)) { New-Item -Path $chromePolicy -Force | Out-Null }
+    Set-ItemProperty -Path $chromePolicy -Name "PrintPreviewDisabled" -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $chromePolicy -Name "PrintingEnabled" -Value 1 -Type DWord -Force
+
+    $edgePolicy = "HKCU:\Software\Policies\Microsoft\Edge"
+    if (-not (Test-Path $edgePolicy)) { New-Item -Path $edgePolicy -Force | Out-Null }
+    Set-ItemProperty -Path $edgePolicy -Name "PrintPreviewDisabled" -Value 1 -Type DWord -Force
+    Set-ItemProperty -Path $edgePolicy -Name "PrintingEnabled" -Value 1 -Type DWord -Force
+    Write-Host "    [OK] Janela de previa do navegador desativada permanentemente." -ForegroundColor Green
+} catch {
+    Write-Host "    [!] Aviso ao gravar chaves de registro: $_" -ForegroundColor Yellow
+}
+
+# 2. Criar Atalho na Area de Trabalho com Modo Kiosk Silencioso
+Write-Host "[*] 2/4 Criando Atalho 'Salgados VIP - Painel PDV' na Area de Trabalho..." -ForegroundColor Cyan
+$targetUrl = "${currentUrl}"
+$userDataDir = Join-Path $env:LOCALAPPDATA "SalgadosVIP_PDV"
+
+$browserExe = ""
+$paths = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+    "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
 )
+foreach ($p in $paths) {
+    if (Test-Path $p) { $browserExe = $p; break }
+}
+if (-not $browserExe) { $browserExe = "msedge.exe" }
 
-echo [*] 2. Configurando perfil isolado de Kiosk Printing...
-set TARGET_URL="${currentUrl}"
-set USER_DATA_DIR=%LOCALAPPDATA%\\SalgadosVIP_PDV
+try {
+    $wsh = New-Object -ComObject WScript.Shell
+    $desktopPath = [Environment]::GetFolderPath("Desktop")
+    $shortcutPath = Join-Path $desktopPath "Salgados VIP - Painel PDV.lnk"
+    $shortcut = $wsh.CreateShortcut($shortcutPath)
+    $shortcut.TargetPath = $browserExe
+    $shortcut.Arguments = "--kiosk-printing --user-data-dir=\`"$userDataDir\`" --app=\`"$targetUrl\`""
+    $shortcut.WorkingDirectory = $desktopPath
+    $shortcut.Description = "Salgados VIP - Painel Administrativo PDV com Impressao Silenciosa"
+    $shortcut.Save()
+    Write-Host "    [OK] Atalho criado na sua Area de Trabalho com sucesso!" -ForegroundColor Green
+} catch {
+    Write-Host "    [!] Erro ao criar atalho: $_" -ForegroundColor Yellow
+}
 
-if not exist "%USER_DATA_DIR%" mkdir "%USER_DATA_DIR%"
+# 3. Registrar na Inicializacao do Windows (Startup)
+Write-Host "[*] 3/4 Configurando inicializacao automatica ao ligar o computador..." -ForegroundColor Cyan
+try {
+    $startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+    $myPath = $MyInvocation.MyCommand.Path
+    if (-not $myPath) { $myPath = Join-Path $appDataDir "Servico_Impressao_Silenciosa.bat" }
 
-echo [*] 3. Abrindo Painel em modo PDV Kiosk (Zero Telas de Confirmacao)...
+    $permanentBat = Join-Path $appDataDir "Servico_Impressao_Silenciosa.bat"
+    if (Test-Path $myPath) {
+        Copy-Item -Path $myPath -Destination $permanentBat -Force -ErrorAction SilentlyContinue
+    }
 
-:: 1. Tenta Google Chrome com perfil isolado e kiosk-printing
-if exist "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe" (
-    echo [+] Iniciando via Google Chrome (Kiosk)...
-    start "" "%ProgramFiles%\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --no-first-run --no-default-browser-check --disable-features=TranslateUI --disable-extensions --app="%TARGET_URL%"
-    goto :FIM
-)
-if exist "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe" (
-    echo [+] Iniciando via Google Chrome x86 (Kiosk)...
-    start "" "%ProgramFiles(x86)%\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --no-first-run --no-default-browser-check --disable-features=TranslateUI --disable-extensions --app="%TARGET_URL%"
-    goto :FIM
-)
-if exist "%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe" (
-    echo [+] Iniciando via Google Chrome User (Kiosk)...
-    start "" "%LocalAppData%\\Google\\Chrome\\Application\\chrome.exe" --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --no-first-run --no-default-browser-check --disable-features=TranslateUI --disable-extensions --app="%TARGET_URL%"
-    goto :FIM
-)
+    $startupVbs = Join-Path $startupDir "SalgadosVIP_Impressao_Silenciosa.vbs"
+    $vbsContent = "Set WshShell = CreateObject(\`"WScript.Shell\`")\`nWshShell.Run Chr(34) & \`"$permanentBat\`" & Chr(34), 0, False"
+    Set-Content -Path $startupVbs -Value $vbsContent -Encoding UTF8
+    Write-Host "    [OK] Inicializacao automatica configurada na pasta Startup." -ForegroundColor Green
+} catch {
+    Write-Host "    [!] Aviso na inicializacao: $_" -ForegroundColor Yellow
+}
 
-:: 2. Tenta Microsoft Edge com perfil isolado e kiosk-printing
-if exist "%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe" (
-    echo [+] Iniciando via Microsoft Edge (Kiosk)...
-    start "" "%ProgramFiles(x86)%\\Microsoft\\Edge\\Application\\msedge.exe" --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --no-first-run --no-default-browser-check --disable-features=TranslateUI --disable-extensions --app="%TARGET_URL%"
-    goto :FIM
-)
-if exist "%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe" (
-    echo [+] Iniciando via Microsoft Edge x64 (Kiosk)...
-    start "" "%ProgramFiles%\\Microsoft\\Edge\\Application\\msedge.exe" --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --no-first-run --no-default-browser-check --disable-features=TranslateUI --disable-extensions --app="%TARGET_URL%"
-    goto :FIM
-)
+# 4. Iniciar Servidor de Spooler Local na Porta 18181
+Write-Host "[*] 4/4 Iniciando Servidor de Impressao Silenciosa (Porta 18181)..." -ForegroundColor Cyan
+$port = 18181
+$listener = $null
 
-:: 3. Fallback
-start msedge --kiosk-printing --user-data-dir="%USER_DATA_DIR%" --app="%TARGET_URL%"
+$isOpen = $false
+try {
+    $tcp = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue
+    if ($tcp) { $isOpen = $true }
+} catch {}
 
-:FIM
-timeout /t 2 >nul
-exit
+if ($isOpen) {
+    Write-Host "    [OK] O servico ja esta ativo e pronto na porta 18181!" -ForegroundColor Green
+} else {
+    try {
+        $listener = New-Object System.Net.HttpListener
+        $listener.Prefixes.Add("http://127.0.0.1:$port/")
+        $listener.Start()
+        Write-Host "    [OK] Servidor de impressao ativo em http://127.0.0.1:$port/ !" -ForegroundColor Green
+    } catch {
+        Write-Host "    [!] Erro ao abrir porta $port : $_" -ForegroundColor Yellow
+    }
+}
+
+Write-Host ""
+Write-Host "=================================================================" -ForegroundColor Green
+Write-Host " [SUCESSO TOTAL] TUDO PRONTO PARA IMPRIMIR NO AUTOMATICO!" -ForegroundColor Green
+Write-Host " 1. Use o atalho 'Salgados VIP - Painel PDV' na Area de Trabalho." -ForegroundColor Cyan
+Write-Host " 2. Ele abre com KIOSK PRINTING: envio direto sem caixas de dialogo!" -ForegroundColor Cyan
+Write-Host " 3. Mantenha esta janela minimizada durante o expediente." -ForegroundColor Cyan
+Write-Host "=================================================================" -ForegroundColor Green
+Write-Host ""
+
+if ($listener -and $listener.IsListening) {
+    Start-Process $browserExe "--kiosk-printing --user-data-dir=\`"$userDataDir\`" --app=\`"$targetUrl\`"" -ErrorAction SilentlyContinue
+
+    while ($listener.IsListening) {
+        try {
+            $context = $listener.GetContext()
+            $request = $context.Request
+            $response = $context.Response
+
+            $origin = $request.Headers["Origin"]
+            if ($origin) {
+                $response.AddHeader("Access-Control-Allow-Origin", $origin)
+            } else {
+                $response.AddHeader("Access-Control-Allow-Origin", "*")
+            }
+            $response.AddHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS")
+            $response.AddHeader("Access-Control-Allow-Headers", "Content-Type, X-VIP-Token, Authorization")
+
+            if ($request.HttpMethod -eq "OPTIONS") {
+                $response.StatusCode = 200
+                $response.Close()
+                continue
+            }
+
+            if ($request.HttpMethod -eq "GET" -and $request.Url.LocalPath -eq "/status") {
+                $defaultPrinter = (Get-CimInstance Win32_Printer | Where-Object Default -eq $true | Select-Object -ExpandProperty Name)
+                $installed = @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name)
+                $respObj = @{
+                    status = "online"
+                    online = $true
+                    defaultPrinter = $defaultPrinter
+                    installedPrinters = $installed
+                } | ConvertTo-Json
+                $buf = [System.Text.Encoding]::UTF8.GetBytes($respObj)
+                $response.ContentType = "application/json; charset=utf-8"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.OutputStream.Close()
+                continue
+            }
+
+            if ($request.HttpMethod -eq "GET" -and $request.Url.LocalPath -eq "/ping") {
+                $respObj = @{ online = $true; service = "Salgados VIP Spooler" } | ConvertTo-Json
+                $buf = [System.Text.Encoding]::UTF8.GetBytes($respObj)
+                $response.ContentType = "application/json; charset=utf-8"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.OutputStream.Close()
+                continue
+            }
+
+            if ($request.HttpMethod -eq "POST" -and $request.Url.LocalPath -eq "/print") {
+                $reader = New-Object System.IO.StreamReader($request.InputStream, [System.Text.Encoding]::UTF8)
+                $body = $reader.ReadToEnd()
+                $reader.Close()
+
+                $json = ConvertFrom-Json $body
+                $receiptText = if ($json.receiptText) { $json.receiptText } else { $json.text }
+                $orderId = if ($json.orderId) { $json.orderId } else { "MANUAL" }
+                $printerName = $json.printerName
+                $copies = if ($json.copies) { [int]$json.copies } else { 1 }
+
+                Write-Host "[+] Imprimindo pedido $orderId ($copies via(s))..." -ForegroundColor Cyan
+                $tempFile = [System.IO.Path]::GetTempFileName() + ".txt"
+                [System.IO.File]::WriteAllText($tempFile, $receiptText, [System.Text.Encoding]::GetEncoding(1252))
+
+                for ($i = 1; $i -le $copies; $i++) {
+                    if ($printerName -and $printerName -ne "windows_default") {
+                        Get-Content -LiteralPath $tempFile | Out-Printer -Name $printerName
+                    } else {
+                        Get-Content -LiteralPath $tempFile | Out-Printer
+                    }
+                }
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+
+                $respObj = @{ success = $true; orderId = $orderId; message = "Impresso com sucesso via Spooler." } | ConvertTo-Json
+                $buf = [System.Text.Encoding]::UTF8.GetBytes($respObj)
+                $response.ContentType = "application/json; charset=utf-8"
+                $response.ContentLength64 = $buf.Length
+                $response.OutputStream.Write($buf, 0, $buf.Length)
+                $response.OutputStream.Close()
+            }
+        } catch {
+            Write-Host "[!] Erro no loop de impressao: $_" -ForegroundColor Red
+        }
+    }
+}
 `;
+};
 
+// 1. Ativador Universal em 1 Clique (Zero Python, Zero Dependências)
+window.downloadUniversalSilentPrintPackage = function() {
+  const batContent = window.getUniversalSilentPrintBatContent("Salgados VIP - Ativador Universal de Impressao Silenciosa (Zero Dialogos)");
   const blob = new Blob([batContent], { type: "application/bat" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "Abrir_Painel_Salgados_Impressao_Silenciosa.bat";
+  a.download = "Ativar_Impressao_Silenciosa_SalgadosVIP.bat";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
-  alert("Inicializador Kiosk baixado com sucesso!\n\nEle cria uma sessão exclusiva e isolada com --kiosk-printing e --user-data-dir, enviando o pedido direto para a impressora padrão sem abrir janela de confirmação!");
+  alert("⚡ Ativador Universal baixado com sucesso!\n\n1. Execute o arquivo 'Ativar_Impressao_Silenciosa_SalgadosVIP.bat'.\n2. Ele não precisa de Python nem arquivos adicionais!\n3. Ele configura o Windows para desativar a janela de confirmação de impressão, cria o atalho 'Salgados VIP - Painel PDV' na Área de Trabalho e ativa o Spooler na porta 18181!");
 };
 
+// 2. Inicializador Kiosk com Perfil Isolado
+window.downloadWindowsSilentPrintLauncher = function() {
+  const batContent = window.getUniversalSilentPrintBatContent("Salgados VIP - Inicializador PDV com Impressao Silenciosa (Zero Dialogos)");
+  const blob = new Blob([batContent], { type: "application/bat" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "Abrir_Painel_Impressao_Silenciosa.bat";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  alert("Inicializador Kiosk baixado com sucesso!\n\nEle ativa o perfil isolado com --kiosk-printing e conecta direto à impressora padrão do Windows sem abrir janela de confirmação!");
+};
+
+// 3. Agente Spooler Local (Porta 18181)
 window.downloadPrintAgentLauncher = function() {
-  const batContent = `@echo off
-chcp 65001 >nul
-title Salgados VIP - Servico de Impressao Silenciosa Local (Zero Dialogos)
-cls
-echo =====================================================================
-echo    SALGADOS VIP - SERVICO DE IMPRESSAO SILENCIOSA (WINDOWS)
-echo =====================================================================
-echo.
-echo [*] Iniciando agente de impressao em segundo plano...
-echo [*] Este servico imprime direto no Spooler do Windows (porta 18181)
-echo [*] e monitora pedidos da nuvem mesmo com o navegador fechado!
-echo.
-
-where py >nul 2>nul
-if %errorlevel% equ 0 (
-    py "%~dp0Agente_Impressao_Silenciosa.py"
-    goto :FIM
-)
-
-where python >nul 2>nul
-if %errorlevel% equ 0 (
-    python "%~dp0Agente_Impressao_Silenciosa.py"
-    goto :FIM
-)
-
-echo [*] Python nao encontrado no PATH. Usando motor PowerShell...
-powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0Servico_Impressao_Silenciosa.ps1"
-
-:FIM
-if %errorlevel% neq 0 (
-    echo.
-    echo [!] O servico foi encerrado ou encontrou um erro.
-    pause
-)
-`;
-
+  const batContent = window.getUniversalSilentPrintBatContent("Salgados VIP - Servico de Impressao Silenciosa (Porta 18181)");
   const blob = new Blob([batContent], { type: "application/bat" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -6277,40 +6420,12 @@ if %errorlevel% neq 0 (
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
-  alert("Agente de Spooler Local baixado com sucesso!\n\nEle conecta o painel diretamente à fila de impressão do Windows (porta 18181). Ao iniciar, ele imprime todos os pedidos no papel sem tocar na tela do navegador!");
+  alert("Agente de Spooler baixado com sucesso!\n\nTotalmente autônomo e sem precisar de Python. Ao executar, ele escuta a porta 18181 e envia qualquer impressão diretamente para o Windows!");
 };
 
+// 4. Criador de Atalho na Área de Trabalho
 window.downloadDesktopShortcutCreator = function() {
-  const batContent = `@echo off
-chcp 65001 >nul
-title Salgados VIP - Criar Atalho na Área de Trabalho
-cls
-echo =====================================================================
-echo    SALGADOS VIP - CRIANDO ATALHO NA ÁREA DE TRABALHO
-echo =====================================================================
-echo.
-set SCRIPT="%TEMP%\\create_vip_shortcut.vbs"
-if exist %SCRIPT% del %SCRIPT%
-
-echo Set oWS = WScript.CreateObject("WScript.Shell") >> %SCRIPT%
-echo sLinkFile = oWS.SpecialFolders("Desktop") ^& "\\Salgados VIP - Painel PDV.lnk" >> %SCRIPT%
-echo Set oLink = oWS.CreateShortcut(sLinkFile) >> %SCRIPT%
-echo oLink.TargetPath = "%~dp0Abrir_Painel_Impressao_Silenciosa.bat" >> %SCRIPT%
-echo oLink.WorkingDirectory = "%~dp0" >> %SCRIPT%
-echo oLink.Description = "Salgados VIP - Painel com Impressao Silenciosa" >> %SCRIPT%
-echo oLink.Save >> %SCRIPT%
-
-cscript /nologo %SCRIPT%
-if exist %SCRIPT% del %SCRIPT%
-
-echo [+] Atalho 'Salgados VIP - Painel PDV' criado na sua Área de Trabalho!
-echo.
-echo Basta clicar duas vezes nele na sua Área de Trabalho para abrir o painel
-echo com a impressão silenciosa direta já ativada!
-echo.
-timeout /t 4 >nul
-`;
-
+  const batContent = window.getUniversalSilentPrintBatContent("Salgados VIP - Criador de Atalho PDV na Area de Trabalho");
   const blob = new Blob([batContent], { type: "application/bat" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -6319,7 +6434,7 @@ timeout /t 4 >nul
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
-  alert("Criador de atalho baixado!\n\nColoque-o na mesma pasta do app e dê 2 cliques para criar o atalho 'Salgados VIP - Painel PDV' na sua Área de Trabalho!");
+  alert("Criador de atalho baixado!\n\nDê 2 cliques para criar o atalho 'Salgados VIP - Painel PDV' na sua Área de Trabalho com impressão silenciosa automática!");
 };
 
 window.checkPrintAgentStatus = async function() {
@@ -10448,7 +10563,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v51.0 (Bkp 51)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v52.0 (Bkp 52)";
   }
 
   setTimeout(() => {
