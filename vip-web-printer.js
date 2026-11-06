@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v52.0)
+ * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v52.1)
  * ==============================================================================
  * Módulo 100% Isolado: window.VIPThermalPrinter / window.VIPWebPrinter
  *

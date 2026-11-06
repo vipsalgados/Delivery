@@ -6213,9 +6213,9 @@ $userDataDir = Join-Path $env:LOCALAPPDATA "SalgadosVIP_PDV"
 $browserExe = ""
 $paths = @(
     "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
-    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:SystemDrive\Program Files (x86)\Google\Chrome\Application\chrome.exe",
     "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe",
-    "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+    "$env:SystemDrive\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
     "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
 )
 foreach ($p in $paths) {
@@ -10563,7 +10563,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Atualização dinâmica garantida do rodapé com a versão oficial
   const footerVer = document.getElementById("admin-footer-version");
   if (footerVer) {
-    footerVer.textContent = window.VIP_APP_VERSION || "v52.0 (Bkp 52)";
+    footerVer.textContent = window.VIP_APP_VERSION || "v52.1 (Bkp 52)";
   }
 
   setTimeout(() => {
