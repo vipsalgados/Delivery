@@ -1,0 +1,961 @@
+/* ==============================================================================
+   MÓDULO ISOLADO DE CUPONS, MARKETING ESTRATÉGICO & INTELIGÊNCIA IA (v54.0)
+   Arquivo: vip-marketing.css
+   Totalmente independente — não altera nenhum estilo original do sistema
+   ============================================================================== */
+
+/* ------------------------------------------------------------------------------
+   1. ESTILOS DO PAINEL ADMINISTRATIVO (#tab-coupons e #tab-marketing)
+   ------------------------------------------------------------------------------ */
+.vip-mkt-header-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #7c2d12 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vip-mkt-header-title {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.vip-mkt-header-icon {
+  width: 54px;
+  height: 54px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #f59e0b 0%, #ea580c 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #fff;
+  box-shadow: 0 6px 16px rgba(234, 88, 12, 0.45);
+  flex-shrink: 0;
+}
+
+.vip-mkt-header-title h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+
+.vip-mkt-header-title p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: #cbd5e1;
+}
+
+.vip-mkt-master-toggle-box {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: rgba(255, 255, 255, 0.09);
+  padding: 0.65rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.vip-mkt-master-toggle-box span {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #f8fafc;
+}
+
+/* Switch Moderno Ativar/Desativar */
+.vip-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 27px;
+  flex-shrink: 0;
+}
+
+.vip-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.vip-switch-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #64748b;
+  transition: 0.25s;
+  border-radius: 999px;
+}
+
+.vip-switch-slider:before {
+  position: absolute;
+  content: "";
+  height: 21px;
+  width: 21px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.25s;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.vip-switch input:checked + .vip-switch-slider {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.vip-switch input:checked + .vip-switch-slider:before {
+  transform: translateX(23px);
+}
+
+/* KPI Grid do Módulo */
+.vip-mkt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.vip-mkt-kpi-card {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.vip-mkt-kpi-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  flex-shrink: 0;
+}
+
+.vip-mkt-kpi-icon.orange { background: #fff7ed; color: #ea580c; }
+.vip-mkt-kpi-icon.green { background: #ecfdf5; color: #059669; }
+.vip-mkt-kpi-icon.blue { background: #eff6ff; color: #2563eb; }
+.vip-mkt-kpi-icon.purple { background: #f5f3ff; color: #7c3aed; }
+
+.vip-mkt-kpi-info span {
+  display: block;
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 0.03em;
+}
+
+.vip-mkt-kpi-info strong {
+  display: block;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.vip-mkt-kpi-info small {
+  font-size: 0.74rem;
+  color: #10b981;
+  font-weight: 600;
+}
+
+/* Receitas Prontas (Presets de 1 Clique) */
+.vip-preset-bar {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  border: 1px solid #fde68a;
+  border-radius: 14px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.vip-preset-bar-title {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vip-preset-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.vip-preset-btn {
+  background: #ffffff;
+  border: 1.5px solid #f59e0b;
+  color: #92400e;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.12);
+}
+
+.vip-preset-btn:hover {
+  background: #f59e0b;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+/* Sub-Abas Internas do Módulo de Marketing */
+.vip-mkt-subnav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.45rem;
+  border-radius: 14px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #e2e8f0;
+}
+
+.vip-mkt-subnav-btn {
+  flex: 1;
+  min-width: 155px;
+  border: none;
+  background: transparent;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.84rem;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.vip-mkt-subnav-btn:hover {
+  color: #0f172a;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.vip-mkt-subnav-btn.active {
+  background: #ffffff;
+  color: #ea580c;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.vip-mkt-subpane {
+  display: none;
+}
+
+.vip-mkt-subpane.active {
+  display: block;
+  animation: vipFadeIn 0.22s ease;
+}
+
+@keyframes vipFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Cards de Cupons e Motores */
+.vip-coupons-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
+  gap: 1.15rem;
+  margin-top: 1.25rem;
+}
+
+.vip-coupon-card {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 2px dashed #cbd5e1;
+  padding: 1.25rem;
+  position: relative;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.9rem;
+}
+
+.vip-coupon-card.is-active {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, #ffffff 0%, #fffbeb 100%);
+  box-shadow: 0 6px 18px rgba(245, 158, 11, 0.12);
+}
+
+.vip-coupon-card.is-inactive {
+  opacity: 0.72;
+  background: #f8fafc;
+}
+
+.vip-coupon-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vip-coupon-code-badge {
+  background: #0f172a;
+  color: #fbbf24;
+  font-family: monospace;
+  font-size: 1.05rem;
+  font-weight: 900;
+  padding: 0.35rem 0.8rem;
+  border-radius: 8px;
+  letter-spacing: 0.06em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.vip-coupon-discount-headline {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #ea580c;
+  margin: 0.2rem 0;
+}
+
+.vip-coupon-desc {
+  font-size: 0.83rem;
+  color: #475569;
+  margin: 0;
+}
+
+.vip-coupon-meta-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.vip-coupon-meta-pill {
+  background: #f1f5f9;
+  padding: 0.22rem 0.6rem;
+  border-radius: 6px;
+  font-weight: 600;
+}
+
+.vip-coupon-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 0.75rem;
+  border-top: 1px solid #e2e8f0;
+  gap: 0.5rem;
+}
+
+/* Painéis dos 5 Motores Inteligentes */
+.vip-engine-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.35rem;
+  margin-bottom: 1.25rem;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.vip-engine-card.engine-on {
+  border-left: 5px solid #10b981;
+}
+
+.vip-engine-card.engine-off {
+  border-left: 5px solid #94a3b8;
+}
+
+.vip-engine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.vip-engine-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.vip-engine-badge-num {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ea580c 0%, #f59e0b 100%);
+  color: #fff;
+  font-weight: 800;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.vip-engine-title-group h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.vip-engine-title-group p {
+  margin: 2px 0 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+/* Tabelas e Grids de Retenção e Previsão de Demanda */
+.vip-retention-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.85rem;
+}
+
+.vip-retention-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.65rem;
+}
+
+.vip-retention-item.urgent {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.vip-forecast-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.9rem;
+}
+
+.vip-forecast-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.vip-forecast-box.highlight-fry {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+}
+
+/* Planejamento Estratégico (8 Pilares: SMART, Personas, SWOT, 4Ps, Omnichannel, Criativos, Cronograma, ROI) */
+.vip-plan-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.15rem;
+  margin-bottom: 1.25rem;
+}
+
+.vip-swot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.vip-swot-box {
+  border-radius: 14px;
+  padding: 1.1rem;
+  border: 1px solid #e2e8f0;
+}
+
+.vip-swot-box.strengths { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+.vip-swot-box.weaknesses { background: #fffbeb; border-color: #fde68a; color: #92400e; }
+.vip-swot-box.opportunities { background: #eff6ff; border-color: #bfdbfe; color: #1e40af; }
+.vip-swot-box.threats { background: #fef2f2; border-color: #fecaca; color: #991b1b; }
+
+.vip-swot-box h4 {
+  margin: 0 0 0.5rem 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.vip-swot-box textarea {
+  width: 100%;
+  min-height: 95px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.85);
+  padding: 0.6rem;
+  font-size: 0.83rem;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Criador de Criativo por IA + Canvas Studio */
+.vip-creative-studio-layout {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .vip-creative-studio-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vip-canvas-preview-wrap {
+  background: #0f172a;
+  border-radius: 16px;
+  padding: 1.1rem;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.25);
+}
+
+.vip-canvas-preview-wrap canvas {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  background: #1e293b;
+}
+
+/* ------------------------------------------------------------------------------
+   2. ESTILOS DO MODO CLIENTE (index.html)
+   ------------------------------------------------------------------------------ */
+
+/* Banner Topo Happy Hour / Desconto Dinâmico */
+.vip-happy-hour-top-banner {
+  background: linear-gradient(90deg, #7c2d12 0%, #ea580c 50%, #d97706 100%);
+  color: #ffffff;
+  padding: 0.65rem 1rem;
+  text-align: center;
+  font-size: 0.86rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.25);
+  position: relative;
+  z-index: 40;
+}
+
+.vip-happy-hour-pill {
+  background: #fef08a;
+  color: #7c2d12;
+  font-weight: 900;
+  font-size: 0.73rem;
+  padding: 0.18rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+/* Card "Seu Pedido Favorito em 1 Clique" no Topo do Cardápio */
+.vip-favorite-order-card {
+  background: linear-gradient(135deg, #fffbeb 0%, #ffedd5 100%);
+  border: 2px solid #f59e0b;
+  border-radius: 18px;
+  padding: 1.15rem 1.35rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  box-shadow: 0 8px 22px -6px rgba(245, 158, 11, 0.28);
+}
+
+.vip-fav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.95rem;
+}
+
+.vip-fav-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #ea580c 0%, #d97706 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35);
+}
+
+.vip-fav-tag {
+  display: inline-block;
+  background: #7c2d12;
+  color: #fde68a;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.vip-fav-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.vip-fav-sub {
+  margin: 2px 0 0 0;
+  font-size: 0.82rem;
+  color: #475569;
+}
+
+.vip-fav-btn {
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.75rem 1.2rem;
+  font-weight: 800;
+  font-size: 0.88rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 0 4px 14px rgba(22, 163, 74, 0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.vip-fav-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(22, 163, 74, 0.45);
+}
+
+/* Recomendação Inteligente no Carrinho (Order Bump 1 Clique) */
+.vip-smart-upsell-card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border: 1.5px solid #22c55e;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  margin: 0.85rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.12);
+}
+
+.vip-smart-upsell-info {
+  flex: 1;
+}
+
+.vip-smart-upsell-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #15803d;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  margin-bottom: 3px;
+}
+
+.vip-smart-upsell-title {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #064e3b;
+  margin: 0;
+}
+
+.vip-smart-upsell-sub {
+  font-size: 0.76rem;
+  color: #166534;
+  margin: 2px 0 0 0;
+}
+
+.vip-smart-upsell-btn {
+  background: #16a34a;
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.28);
+}
+
+.vip-smart-upsell-btn:hover {
+  background: #15803d;
+}
+
+/* Caixa de Cupom de Desconto no Checkout */
+.vip-checkout-coupon-card {
+  background: #f8fafc;
+  border: 1.5px dashed #cbd5e1;
+  border-radius: 14px;
+  padding: 0.9rem 1rem;
+  margin: 0.85rem 0 1.1rem 0;
+}
+
+.vip-checkout-coupon-head {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.vip-checkout-coupon-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.vip-checkout-coupon-row input {
+  flex: 1;
+  padding: 0.58rem 0.75rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.vip-checkout-coupon-row button {
+  background: #0f172a;
+  color: #fbbf24;
+  border: none;
+  border-radius: 10px;
+  padding: 0 1rem;
+  font-weight: 800;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.vip-available-coupons-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+}
+
+.vip-avail-coupon-pill {
+  background: #fffbeb;
+  border: 1px solid #f59e0b;
+  color: #92400e;
+  font-size: 0.73rem;
+  font-weight: 800;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.vip-avail-coupon-pill:hover {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.vip-coupon-feedback-msg {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+}
+
+.vip-coupon-feedback-msg.ok {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.vip-coupon-feedback-msg.err {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Pop-up Promocional IA na Entrada do Site */
+.vip-popup-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(4px);
+  z-index: 9998;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.vip-popup-backdrop.active {
+  display: flex;
+  animation: vipFadeIn 0.25s ease;
+}
+
+.vip-popup-modal {
+  width: 100%;
+  max-width: 420px;
+  border-radius: 24px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.55);
+  position: relative;
+  text-align: center;
+}
+
+.vip-popup-hero {
+  background: linear-gradient(135deg, #7c2d12 0%, #ea580c 55%, #f59e0b 100%);
+  color: #ffffff;
+  padding: 1.85rem 1.5rem 1.4rem 1.5rem;
+  position: relative;
+}
+
+.vip-popup-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.28);
+  color: #ffffff;
+  font-size: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.vip-popup-badge {
+  display: inline-block;
+  background: #fef08a;
+  color: #7c2d12;
+  font-size: 0.74rem;
+  font-weight: 900;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.65rem;
+}
+
+.vip-popup-hero h3 {
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.vip-popup-body {
+  padding: 1.4rem 1.5rem 1.6rem 1.5rem;
+}
+
+.vip-popup-body p {
+  margin: 0 0 1rem 0;
+  font-size: 0.92rem;
+  color: #334155;
+  line-height: 1.45;
+}
+
+.vip-popup-coupon-highlight {
+  background: #fffbeb;
+  border: 2px dashed #f59e0b;
+  border-radius: 12px;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1.15rem;
+  display: inline-block;
+}
+
+.vip-popup-coupon-highlight span {
+  display: block;
+  font-size: 0.72rem;
+  color: #92400e;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.vip-popup-coupon-highlight strong {
+  font-size: 1.2rem;
+  font-family: monospace;
+  color: #0f172a;
+  letter-spacing: 0.08em;
+}
+
+.vip-popup-cta-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+  color: #ffffff;
+  border: none;
+  border-radius: 14px;
+  padding: 0.95rem 1.25rem;
+  font-size: 0.98rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.35);
+}
+
+.vip-popup-skip-btn {
+  margin-top: 0.75rem;
+  background: transparent;
+  border: none;
+  color: #64748b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}

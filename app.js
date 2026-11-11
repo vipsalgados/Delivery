@@ -1609,7 +1609,13 @@ function updateCartGlobalUI() {
     }
   }
 
-  const finalTotal = subtotal + (isPickup ? 0 : deliveryFee);
+  let finalTotal = subtotal + (isPickup ? 0 : deliveryFee);
+  if (typeof window.VIPMarketing !== "undefined" && typeof window.VIPMarketing.renderCheckoutMarketingWidgets === "function") {
+    const mktAdj = window.VIPMarketing.renderCheckoutMarketingWidgets(cartItems, subtotal, isPickup ? 0 : deliveryFee, fulfillment);
+    if (mktAdj && typeof mktAdj.finalTotal === "number") {
+      finalTotal = mktAdj.finalTotal;
+    }
+  }
 
   if (drawerSubtotal) drawerSubtotal.textContent = formatBRL(subtotal);
   if (drawerTotal) drawerTotal.textContent = formatBRL(finalTotal);
@@ -1620,6 +1626,21 @@ function updateCartGlobalUI() {
 
   renderCartDrawerItems();
 }
+window.updateCartGlobalUI = updateCartGlobalUI;
+window.calculateOrderTotal = calculateOrderTotal;
+window.getCartItemsSnapshot = function() { return cartItems; };
+window.addMarketingItemsToCart = function(itemsToAdd) {
+  if (!Array.isArray(itemsToAdd)) return;
+  itemsToAdd.forEach(it => {
+    const cloned = JSON.parse(JSON.stringify(it));
+    cloned.cartItemId = "fav-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
+    cartItems.push(cloned);
+  });
+  renderCustomCategories();
+  updateCartGlobalUI();
+  openCheckoutDrawer();
+  showToastNotification("🎉 Seu Pedido Favorito foi adicionado à sacola!");
+};
 
 function buildRepeatPillsBarHtml(cartItemId, currentMult) {
   const cur = Math.max(1, parseInt(currentMult, 10) || 1);
@@ -2199,7 +2220,13 @@ window.updatePixCheckoutUI = function() {
   const subtotal = calculateOrderTotal();
   const feeInfo = getCurrentDeliveryCalculation();
   const deliveryFee = (fulfillment === "Entrega" && feeInfo && feeInfo.allowed) ? feeInfo.fee : 0;
-  const total = subtotal + deliveryFee;
+  let total = subtotal + deliveryFee;
+  if (typeof window.VIPMarketing !== "undefined" && typeof window.VIPMarketing.getCheckoutAdjustment === "function") {
+    const mktAdj = window.VIPMarketing.getCheckoutAdjustment(subtotal, deliveryFee, fulfillment);
+    if (mktAdj && typeof mktAdj.finalTotal === "number") {
+      total = mktAdj.finalTotal;
+    }
+  }
 
   const cfg = getStoreConfig();
   const pixDisplayTotal = document.getElementById("pix-display-total");
@@ -2435,7 +2462,11 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
   }
 
   const subtotal = calculateOrderTotal();
-  const finalTotal = subtotal + (fulfillment === "Entrega" ? currentDeliveryFee : 0);
+  let mktAdjustment = { discountAmount: 0, bonusSalgados: 0, appliedCouponCode: null, summaryLabel: "" };
+  if (typeof window.VIPMarketing !== "undefined" && typeof window.VIPMarketing.getCheckoutAdjustment === "function") {
+    mktAdjustment = window.VIPMarketing.getCheckoutAdjustment(subtotal, fulfillment === "Entrega" ? currentDeliveryFee : 0, fulfillment) || mktAdjustment;
+  }
+  const finalTotal = Math.max(0, subtotal + (fulfillment === "Entrega" ? currentDeliveryFee : 0) - (mktAdjustment.discountAmount || 0));
   const cfg = getStoreConfig();
 
   // Registrar pedido no banco de dados local para monitoramento ao vivo no painel adm
@@ -2460,16 +2491,22 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
     subtotal: subtotal,
     deliveryFee: currentDeliveryFee,
     deliveryDistanceKm: currentDeliveryDistance,
+    discountAmount: mktAdjustment.discountAmount || 0,
+    couponCode: mktAdjustment.appliedCouponCode || null,
+    bonusSalgados: mktAdjustment.bonusSalgados || 0,
     totalAmount: finalTotal,
     paymentMethod: payment,
     cashChangeFor: payment === "Dinheiro" && change ? change : null,
     pixCode: payment === "Pix" ? currentPixPayload : null,
-    notes: notes || null,
+    notes: notes ? (mktAdjustment.summaryLabel ? `${notes} | [${mktAdjustment.summaryLabel}]` : notes) : (mktAdjustment.summaryLabel || null),
     status: "novo",
     printedAt: null
   };
 
   const savedOrder = await VIPDatabase.addOrder(orderObj);
+  if (typeof window.VIPMarketing !== "undefined" && typeof window.VIPMarketing.recordOrderMarketingConversion === "function") {
+    window.VIPMarketing.recordOrderMarketingConversion(orderObj);
+  }
 
   // MEMÓRIA INTELIGENTE: Salvar perfil do cliente (1 única vez, sem senhas)
   const custProfile = {
@@ -2601,6 +2638,12 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
   msg += `*Subtotal:* ${formatBRL(subtotal)}\n`;
   if (fulfillment === "Entrega") {
     msg += `*Taxa de Entrega (${currentDeliveryDistance.toFixed(1)} km):* ${formatBRL(currentDeliveryFee)}\n`;
+  }
+  if (mktAdjustment.discountAmount > 0) {
+    msg += `🎟️ *Desconto (${mktAdjustment.summaryLabel || 'Cupom VIP'}):* - ${formatBRL(mktAdjustment.discountAmount)}\n`;
+  }
+  if (mktAdjustment.bonusSalgados > 0) {
+    msg += `🎁 *Bônus Promocional:* +${mktAdjustment.bonusSalgados} Salgadinhos Extras Grátis!\n`;
   }
   msg += `*VALOR TOTAL:* ${formatBRL(finalTotal)}\n`;
 

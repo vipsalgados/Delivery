@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v53.0 (Bkp 53)";
+window.VIP_APP_VERSION = "v54.0 (Bkp 54)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -37,7 +37,8 @@ const STORAGE_KEYS = {
   CATALOG_ORDER: "salgados_vip_catalog_order",
   CASH_CLOSINGS: "salgados_vip_cash_closings",
   MOTOBOYS: "salgados_vip_motoboys",
-  CUSTOMERS_CRM: "salgados_vip_customers_crm"
+  CUSTOMERS_CRM: "salgados_vip_customers_crm",
+  MARKETING: "salgados_vip_marketing_v54"
 };
 
 // Ordenador universal com base na sequência de IDs customizada pelo administrador
@@ -2742,6 +2743,7 @@ const VIPDatabase = {
             if (row.id === "delivery" && row.value) localStorage.setItem(STORAGE_KEYS.DELIVERY, JSON.stringify(row.value));
             if (row.id === "printer" && row.value) localStorage.setItem(STORAGE_KEYS.PRINTER, JSON.stringify(row.value));
             if (row.id === "catalog_order" && row.value) localStorage.setItem(STORAGE_KEYS.CATALOG_ORDER, JSON.stringify(row.value));
+            if (row.id === "marketing" && row.value) localStorage.setItem(STORAGE_KEYS.MARKETING, JSON.stringify(row.value));
             localStorage.removeItem(STORAGE_KEYS.AUTH);
           });
         }

@@ -22,6 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="pwa.css">
+  <link rel="stylesheet" href="vip-marketing.css?v=54.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
@@ -244,6 +245,12 @@
       <div class="order-items-container" id="order-items-container">
         <!-- Renderizado dinamicamente -->
       </div>
+
+      <!-- Recomendação Inteligente no Carrinho (Order Bump IA - Módulo Isolado) -->
+      <div id="vip-smart-cart-upsell" style="display: none;"></div>
+
+      <!-- Caixa de Cupom de Desconto VIP (Módulo Isolado) -->
+      <div id="vip-checkout-coupon-box" style="display: none;"></div>
 
       <!-- Formulário de Finalização -->
       <form class="checkout-form" id="checkout-form" onsubmit="return false;">
@@ -475,6 +482,10 @@
           <span>Taxa de Entrega (<span id="drawer-delivery-km-label">2.0 km</span>):</span>
           <span id="drawer-delivery-amount" class="fee-text-highlight">R$ 5,00</span>
         </div>
+        <div class="drawer-summary-line" id="drawer-discount-summary-line" style="display: none; color: #15803d; font-weight: 800;">
+          <span id="drawer-discount-label">Cupom / Desconto VIP:</span>
+          <span id="drawer-discount-amount">- R$ 0,00</span>
+        </div>
         <div class="drawer-summary-line drawer-total-highlight">
           <span>Total do Pedido:</span>
           <strong id="drawer-total-amount">R$ 0,00</strong>
@@ -541,9 +552,10 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=53.0"></script>
-  <script src="vip-whatsapp.js?v=53.0"></script>
-  <script src="app.js?v=53.0"></script>
-  <script src="pwa.js?v=53.0"></script>
+  <script src="shared-data.js?v=54.0"></script>
+  <script src="vip-whatsapp.js?v=54.0"></script>
+  <script src="app.js?v=54.0"></script>
+  <script src="vip-marketing.js?v=54.0"></script>
+  <script src="pwa.js?v=54.0"></script>
 </body>
 </html>
