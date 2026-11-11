@@ -870,9 +870,7 @@ body {
   cursor: not-allowed;
 }
 
-/* BARRA FLUTUANTE DE RESUMO DO PEDIDO (CARD DA SACOLA EM VERMELHO) */
-.floating-cart-bar {
-/* FLOATING CART BAR (SEMPRE VISÍVEL QUANDO HÁ ITENS NO CARRINHO) */
+/* BARRA FLUTUANTE DE RESUMO DO PEDIDO (CARD DA SACOLA EM VERMELHO - SEMPRE VISÍVEL QUANDO HÁ ITENS) */
 .floating-cart-bar {
   position: fixed;
   bottom: 16px;
