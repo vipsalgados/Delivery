@@ -1537,7 +1537,32 @@ function getCartItemsCount() {
   }, 0);
 }
 
+const ACTIVE_CART_STORAGE_KEY = "salgados_vip_active_cart_v1";
+
+function saveActiveCartState() {
+  try {
+    if (Array.isArray(cartItems) && cartItems.length > 0) {
+      localStorage.setItem(ACTIVE_CART_STORAGE_KEY, JSON.stringify(cartItems));
+    } else {
+      localStorage.removeItem(ACTIVE_CART_STORAGE_KEY);
+    }
+  } catch (e) {}
+}
+
+function restoreActiveCartState() {
+  try {
+    const raw = localStorage.getItem(ACTIVE_CART_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        cartItems = parsed;
+      }
+    }
+  } catch (e) {}
+}
+
 function updateCartGlobalUI() {
+  saveActiveCartState();
   const subtotal = calculateOrderTotal();
   const count = getCartItemsCount();
 
@@ -1545,12 +1570,24 @@ function updateCartGlobalUI() {
   const countBadge = document.getElementById("bar-items-count");
   const totalBar = document.getElementById("bar-items-total");
 
+  const navCartBtn = document.getElementById("nav-sticky-cart-btn");
+  const navCartCount = document.getElementById("nav-cart-count");
+  const navCartTotal = document.getElementById("nav-cart-total");
+
   if (count > 0) {
-    floatingBar.style.display = "flex";
-    countBadge.textContent = count;
-    totalBar.textContent = formatBRL(subtotal);
+    if (floatingBar) floatingBar.style.display = "flex";
+    if (countBadge) countBadge.textContent = count;
+    if (totalBar) totalBar.textContent = formatBRL(subtotal);
+
+    if (navCartBtn) navCartBtn.style.display = "inline-flex";
+    if (navCartCount) navCartCount.textContent = count;
+    if (navCartTotal) navCartTotal.textContent = formatBRL(subtotal);
+
+    document.body.classList.add("has-cart-items");
   } else {
-    floatingBar.style.display = "none";
+    if (floatingBar) floatingBar.style.display = "none";
+    if (navCartBtn) navCartBtn.style.display = "none";
+    document.body.classList.remove("has-cart-items");
   }
 
   // Resumo Financeiro do Drawer (Subtotal + Taxa de Entrega + Total)
@@ -3024,6 +3061,7 @@ window.logoutCustomerProfile = function() {
 // INICIALIZAÇÃO
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
+  restoreActiveCartState();
   renderStoreBranding();
   checkStoreStatus();
   // Atualiza status do horário a cada 1 minuto automaticamente

@@ -22,7 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="pwa.css">
-  <link rel="stylesheet" href="vip-marketing.css?v=54.0">
+  <link rel="stylesheet" href="vip-marketing.css?v=55.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
@@ -64,9 +64,16 @@
  
   <!-- Barra de Navegação Rápida de Categorias -->
   <nav class="category-nav-bar" id="category-nav-bar">
-    <div class="category-nav-container" id="category-nav-container">
-      <a href="#section-kits" class="category-nav-pill active"><i class="fa-solid fa-boxes-stacked"></i> Kits de Salgados</a>
-      <!-- Outras categorias ativas inseridas via JS -->
+    <div class="category-nav-inner">
+      <div class="category-nav-container" id="category-nav-container">
+        <a href="#section-kits" class="category-nav-pill active"><i class="fa-solid fa-boxes-stacked"></i> Kits de Salgados</a>
+        <!-- Outras categorias ativas inseridas via JS -->
+      </div>
+      <button type="button" class="nav-sticky-cart-btn" id="nav-sticky-cart-btn" onclick="openCheckoutDrawer()" style="display: none;" title="Voltar para a sacola e concluir o pedido">
+        <i class="fa-solid fa-basket-shopping"></i>
+        <span>Concluir Pedido (<strong id="nav-cart-count">0</strong>)</span>
+        <span class="nav-cart-price-tag" id="nav-cart-total">R$ 0,00</span>
+      </button>
     </div>
   </nav>
 
@@ -211,16 +218,16 @@
   </aside>
 
   <!-- BARRA FLUTUANTE DE RESUMO DO PEDIDO (CARD DA SACOLA) -->
-  <div class="floating-cart-bar" id="floating-cart-bar" style="display: none;">
+  <div class="floating-cart-bar" id="floating-cart-bar" style="display: none;" onclick="openCheckoutDrawer()">
     <div class="cart-bar-left">
       <div class="cart-badge-bubble" id="bar-items-count">0</div>
       <div>
-        <div class="cart-bar-sub">Total da Sacola</div>
+        <div class="cart-bar-sub"><i class="fa-solid fa-circle-check" style="color: #fde047;"></i> Seu Carrinho está Ativo</div>
         <div class="cart-bar-price" id="bar-items-total">R$ 0,00</div>
       </div>
     </div>
-    <button class="btn-open-cart-drawer" id="btn-open-cart-drawer">
-      Ver Sacola <i class="fa-solid fa-basket-shopping"></i>
+    <button type="button" class="btn-open-cart-drawer" id="btn-open-cart-drawer">
+      Concluir Pedido <i class="fa-solid fa-arrow-right"></i>
     </button>
   </div>
 
@@ -552,10 +559,10 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=54.0"></script>
-  <script src="vip-whatsapp.js?v=54.0"></script>
-  <script src="app.js?v=54.0"></script>
-  <script src="vip-marketing.js?v=54.0"></script>
-  <script src="pwa.js?v=54.0"></script>
+  <script src="shared-data.js?v=55.0"></script>
+  <script src="vip-whatsapp.js?v=55.0"></script>
+  <script src="app.js?v=55.0"></script>
+  <script src="vip-marketing.js?v=55.0"></script>
+  <script src="pwa.js?v=55.0"></script>
 </body>
 </html>
