@@ -228,6 +228,9 @@
       enabled: false, // false = Mantém 100% o Tema Padrão Original da Loja sem alterações
       autoDetectHoliday: false, // Se true, ativa automaticamente o tema da época/feriado atual
       activeThemeId: "default", // default | natal | anonovo | pascoa | saojoao | halloween | trabalhador | maes | namorados | clientes | blackfriday | copa
+      showLogoClimber: true, // Personagem animado descendo da logo + chapéu/coroa na quina da logo
+      showHeaderParticles: true, // Chuva suave de partículas temáticas (neve, estrelas, confetes) só no banner do topo
+      showHeaderParade: true, // Passarela animada atravessando o rodapé do banner do topo
       showMascotBadge: true, // Selo discreto no cabeçalho com personagem/ícone comemorativo
       showSeasonalStrip: true, // Faixa fina e elegante de saudação no topo
       showCornerMascot: true, // Pequeno selo flutuante discreto no canto (desktop)
@@ -243,7 +246,7 @@
     }
   };
 
-  // CATÁLOGO DE TEMAS PRONTOS GERADOS POR IA (CORES, PERSONAGENS DISCRETOS E ÉPOCAS)
+  // CATÁLOGO DE TEMAS PRONTOS GERADOS POR IA (CORES, PERSONAGENS ANIMADOS NA LOGO E ÉPOCAS)
   const AI_SEASONAL_THEMES = {
     default: {
       id: "default",
@@ -257,6 +260,11 @@
       headerBgEnd: "#121214",
       pageBgColor: "#f1f5f9",
       mascotEmoji: "🥟👑",
+      climberEmoji: "👑",
+      climberSpeech: "Fritos na Hora!",
+      logoCapEmoji: "👑",
+      paradeEmojis: "🥟 🔥 🛵 🥟",
+      particles: ["✨", "🥟", "⭐"],
       mascotTitle: "Salgados VIP • Fritos na Hora",
       greetingText: ""
     },
@@ -272,8 +280,13 @@
       headerBgEnd: "#064e3b",
       pageBgColor: "#f8fafc",
       mascotEmoji: "🎅🎄",
-      mascotTitle: "Natal Delicioso Salgados VIP",
-      greetingText: "🎄 Boas Festas! Encomende seus Kits e Centos de Salgados para a Ceia e Confraternizações!"
+      climberEmoji: "🎅",
+      climberSpeech: "Ho Ho Ho! 🥟🎁",
+      logoCapEmoji: "🎄",
+      paradeEmojis: "🦌🛷🎅 🎁 🎄",
+      particles: ["❄️", "✨", "🎄", "⭐", "🎁"],
+      mascotTitle: "Papai Noel chegou no Salgados VIP!",
+      greetingText: "🎄 Feliz Natal! Encomende seus Kits e Centos de Salgados para a Ceia e Confraternizações!"
     },
     anonovo: {
       id: "anonovo",
@@ -287,6 +300,11 @@
       headerBgEnd: "#0f172a",
       pageBgColor: "#f8fafc",
       mascotEmoji: "🥂✨",
+      climberEmoji: "🍾",
+      climberSpeech: "Feliz Ano Novo! ✨",
+      logoCapEmoji: "🎆",
+      paradeEmojis: "🥂 ✨ 🎆 🥟 🎉",
+      particles: ["✨", "🎆", "⭐", "🥂", "🎊"],
       mascotTitle: "Feliz Ano Novo • Celebre com Salgados VIP",
       greetingText: "✨ Feliz Ano Novo! Reúna a família e amigos com salgadinhos quentinhos fritos na hora!"
     },
@@ -302,7 +320,12 @@
       headerBgEnd: "#1e1b4b",
       pageBgColor: "#faf5ff",
       mascotEmoji: "🐰🍫",
-      mascotTitle: "Domingo em Família • Especial de Páscoa",
+      climberEmoji: "🐰",
+      climberSpeech: "Trouxe Salgadinhos! 🥚",
+      logoCapEmoji: "🥚",
+      paradeEmojis: "🐾 🐰 🥚 🍫 🥟",
+      particles: ["🥚", "🍫", "✨", "🐾", "🌸"],
+      mascotTitle: "Coelhinho VIP • Especial de Páscoa",
       greetingText: "🐰 Feliz Páscoa! Antes do chocolate, peça aquele Kit de Salgadinhos Crocantes para a família!"
     },
     trabalhador: {
@@ -317,6 +340,11 @@
       headerBgEnd: "#0f172a",
       pageBgColor: "#f0f9ff",
       mascotEmoji: "👷‍♂️🥟",
+      climberEmoji: "👷‍♂️",
+      climberSpeech: "Hoje é dia de folga! 🥟",
+      logoCapEmoji: "🏆",
+      paradeEmojis: "🏆 👷‍♂️ 🥟 🛵 ⭐",
+      particles: ["⭐", "🏆", "✨", "🥟"],
       mascotTitle: "Homenagem ao Trabalhador • Você merece descansar!",
       greetingText: "💪 Feliz Dia do Trabalhador! Hoje a cozinha é por nossa conta: peça seu Combo e descanse!"
     },
@@ -332,6 +360,11 @@
       headerBgEnd: "#1f1218",
       pageBgColor: "#fff1f2",
       mascotEmoji: "💐❤️",
+      climberEmoji: "💝",
+      climberSpeech: "Te amo, Mãe! 🌹",
+      logoCapEmoji: "👑",
+      paradeEmojis: "🌹 💝 💐 👑 🥟",
+      particles: ["🌸", "❤️", "🌹", "✨", "💝"],
       mascotTitle: "Carinho de Mãe • Hoje ela não cozinha!",
       greetingText: "💐 Especial Dia das Mães: surpreenda quem você ama com um Kit Completo sem louça na cozinha!"
     },
@@ -347,6 +380,11 @@
       headerBgEnd: "#18181b",
       pageBgColor: "#fdf2f8",
       mascotEmoji: "💑❤️",
+      climberEmoji: "💘",
+      climberSpeech: "Amor + Coxinha! ❤️",
+      logoCapEmoji: "💖",
+      paradeEmojis: "💑 💘 ❤️ 🥟 🥤",
+      particles: ["❤️", "💘", "💖", "✨", "🌹"],
       mascotTitle: "Amor de Verdade tem Coxinha Quentinha!",
       greetingText: "❤️ Especial Dia dos Namorados: peça o Combo Casal VIP com refrigerante gelado e molho especial!"
     },
@@ -362,6 +400,11 @@
       headerBgEnd: "#422006",
       pageBgColor: "#fffbeb",
       mascotEmoji: "🪗🌽",
+      climberEmoji: "🤠",
+      climberSpeech: "Ô trem bão! 🪗🥟",
+      logoCapEmoji: "🎏",
+      paradeEmojis: "🔥 🪗 🤠 🌽 🥟 🎏",
+      particles: ["🎏", "🌽", "🔥", "✨", "🎶"],
       mascotTitle: "Arraiá do Salgados VIP • Bão Demais!",
       greetingText: "🎏 Arraiá Salgados VIP! Kits quentinhos perfeitos para sua festa junina e reunião com amigos!"
     },
@@ -377,6 +420,11 @@
       headerBgEnd: "#0f172a",
       pageBgColor: "#f8fafc",
       mascotEmoji: "👔🏆",
+      climberEmoji: "🦸‍♂️",
+      climberSpeech: "Super Pai VIP! 🏆",
+      logoCapEmoji: "👑",
+      paradeEmojis: "🏆 👔 🦸‍♂️ 🥟 🛵",
+      particles: ["🏆", "⭐", "👔", "✨"],
       mascotTitle: "Dia dos Pais VIP • Comemore em Família",
       greetingText: "🏆 Especial Dia dos Pais: reúna toda a família com nossos Super Combos e Kits de Festa!"
     },
@@ -392,6 +440,11 @@
       headerBgEnd: "#0f172a",
       pageBgColor: "#f0fdf4",
       mascotEmoji: "🤝⭐",
+      climberEmoji: "🎁",
+      climberSpeech: "Você é VIP! ⭐",
+      logoCapEmoji: "👑",
+      paradeEmojis: "👑 ⭐ 🎁 🤝 🥟",
+      particles: ["⭐", "👑", "✨", "🎁"],
       mascotTitle: "Semana do Cliente • Obrigado por escolher o VIP!",
       greetingText: "⭐ Semana do Cliente VIP! Aproveite descontos e cupons exclusivos feitos para você!"
     },
@@ -407,6 +460,11 @@
       headerBgEnd: "#09090b",
       pageBgColor: "#faf5ff",
       mascotEmoji: "🎃👻",
+      climberEmoji: "🕷️",
+      climberSpeech: "Gostosuras Crocantes! 🎃",
+      logoCapEmoji: "🧙‍♀️",
+      paradeEmojis: "👻 🎃 🦇 🕸️ 🥟",
+      particles: ["🎃", "👻", "🦇", "🕸️", "✨"],
       mascotTitle: "Gostosuras Crocantes ou Travessuras!",
       greetingText: "🎃 Especial Dia das Bruxas: sem travessuras, só gostosuras fritas na hora! Peça seu Kit!"
     },
@@ -422,6 +480,11 @@
       headerBgEnd: "#18181b",
       pageBgColor: "#f4f4f5",
       mascotEmoji: "🖤🔥",
+      climberEmoji: "🏷️",
+      climberSpeech: "Super Desconto! 🔥",
+      logoCapEmoji: "⚡",
+      paradeEmojis: "🔥 ⚡ 🏷️ 💰 🥟",
+      particles: ["🔥", "⚡", "🏷️", "✨"],
       mascotTitle: "Black Friday VIP • Descontos Reais",
       greetingText: "🔥 BLACK FRIDAY SALGADOS VIP: Combos e Kits com super descontos e cupons especiais hoje!"
     }
@@ -1046,15 +1109,20 @@
   }
 
   function applyCustomerSeasonalTheme() {
-    const existingStyle = document.getElementById("vip-seasonal-theme-vars");
-    const existingStrip = document.getElementById("vip-seasonal-top-strip");
-    const existingMascotBadge = document.getElementById("vip-header-mascot-badge");
-    const existingCorner = document.getElementById("vip-floating-corner-mascot");
-
-    if (existingStyle) existingStyle.remove();
-    if (existingStrip) existingStrip.remove();
-    if (existingMascotBadge) existingMascotBadge.remove();
-    if (existingCorner) existingCorner.remove();
+    const idsToClean = [
+      "vip-seasonal-theme-vars",
+      "vip-seasonal-top-strip",
+      "vip-header-mascot-badge",
+      "vip-floating-corner-mascot",
+      "vip-logo-crown-cap",
+      "vip-logo-climber-wrap",
+      "vip-header-particles-layer",
+      "vip-header-parade-track"
+    ];
+    idsToClean.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.remove();
+    });
 
     const { isDefault, theme, config } = resolveEffectiveTheme();
     if (!config.enabled || isDefault) {
@@ -1083,21 +1151,74 @@
     `;
     document.head.appendChild(styleEl);
 
-    // 2. Faixa fina comemorativa no topo (se ativada e houver saudação)
-    if (config.showSeasonalStrip && theme.greetingText) {
+    const headerEl = document.querySelector(".vip-header");
+    const logoWrapper = document.getElementById("store-logo-wrapper");
+
+    // 2. Personagem Descendo da Logo (Papai Noel, Coelhinho, Fantasminha, etc.) + Chapéu na quina da Logo
+    if (config.showLogoClimber !== false && logoWrapper) {
+      if (theme.logoCapEmoji) {
+        const cap = document.createElement("div");
+        cap.id = "vip-logo-crown-cap";
+        cap.className = "vip-logo-crown-cap";
+        cap.textContent = theme.logoCapEmoji;
+        logoWrapper.appendChild(cap);
+      }
+
+      const climberEmoji = theme.climberEmoji || (theme.mascotEmoji ? Array.from(theme.mascotEmoji)[0] : "🎅");
+      const climberSpeech = theme.climberSpeech || theme.name;
+      const climberWrap = document.createElement("div");
+      climberWrap.id = "vip-logo-climber-wrap";
+      climberWrap.className = "vip-logo-climber-wrap";
+      climberWrap.innerHTML = `
+        <div class="vip-climber-rope"></div>
+        <div class="vip-climber-character">
+          <span>${esc(climberEmoji)}</span>
+          <span class="vip-climber-speech">${esc(climberSpeech)}</span>
+        </div>
+      `;
+      logoWrapper.appendChild(climberWrap);
+    }
+
+    // 3. Partículas Animadas Suaves no Banner do Topo (Neve, Confetes, Estrelas — não cai sobre os produtos!)
+    if (config.showHeaderParticles !== false && headerEl && Array.isArray(theme.particles) && theme.particles.length > 0) {
+      const layer = document.createElement("div");
+      layer.id = "vip-header-particles-layer";
+      layer.className = "vip-header-particles-layer";
+      const particleCount = 14;
+      let particlesHtml = "";
+      for (let i = 0; i < particleCount; i++) {
+        const icon = theme.particles[i % theme.particles.length];
+        const leftPct = Math.round((i / particleCount) * 94) + 2;
+        const duration = (4.5 + (i % 4) * 1.3).toFixed(1);
+        const delay = ((i * 0.65) % 5).toFixed(1);
+        const sizeRem = (0.85 + (i % 3) * 0.22).toFixed(2);
+        particlesHtml += `<span class="vip-header-particle" style="left:${leftPct}%;animation-duration:${duration}s;animation-delay:${delay}s;font-size:${sizeRem}rem;">${esc(icon)}</span>`;
+      }
+      layer.innerHTML = particlesHtml;
+      headerEl.insertBefore(layer, headerEl.firstChild);
+    }
+
+    // 4. Passarela Animada no Rodapé do Banner Topo (ex: Trenó do Papai Noel atravessando)
+    if (config.showHeaderParade !== false && headerEl && theme.paradeEmojis) {
+      const parade = document.createElement("div");
+      parade.id = "vip-header-parade-track";
+      parade.className = "vip-header-parade-track";
+      parade.innerHTML = `<div class="vip-header-parade-runner">${esc(theme.paradeEmojis)}</div>`;
+      headerEl.appendChild(parade);
+    }
+
+    // 5. Faixa fina comemorativa no topo (se ativada e houver saudação)
+    if (config.showSeasonalStrip && theme.greetingText && headerEl && headerEl.parentNode) {
       const strip = document.createElement("div");
       strip.id = "vip-seasonal-top-strip";
       strip.className = "vip-seasonal-greeting-strip";
       strip.style.background = `linear-gradient(90deg, ${theme.headerBgEnd}, ${theme.primaryColor}, ${theme.headerBgStart})`;
       strip.style.color = "#ffffff";
       strip.innerHTML = `<span>${esc(theme.greetingText)}</span>`;
-      const headerEl = document.querySelector(".vip-header");
-      if (headerEl && headerEl.parentNode) {
-        headerEl.parentNode.insertBefore(strip, headerEl);
-      }
+      headerEl.parentNode.insertBefore(strip, headerEl);
     }
 
-    // 3. Personagem / Selo Decorativo Discreto no Cabeçalho
+    // 6. Personagem / Selo Decorativo Discreto no Cabeçalho
     if (config.showMascotBadge && theme.mascotEmoji) {
       const headerContainer = document.querySelector(".vip-header .header-container");
       if (headerContainer) {
@@ -1112,7 +1233,7 @@
       }
     }
 
-    // 4. Selo Flutuante Discreto no Canto Inferior Esquerdo (Apenas Desktop, sem poluir)
+    // 7. Selo Flutuante Discreto no Canto Inferior Esquerdo (Apenas Desktop, sem poluir)
     if (config.showCornerMascot && theme.mascotEmoji) {
       const corner = document.createElement("div");
       corner.id = "vip-floating-corner-mascot";
@@ -2726,7 +2847,10 @@
                   <span class="vip-theme-swatch-dot" style="background:${t.pageBgColor};" title="Fundo Suave"></span>
                 </div>
               </div>
-              <div class="vip-theme-preview-mascot">${esc(t.mascotEmoji)}</div>
+              <div class="vip-theme-preview-mascot" style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:1.85rem;animation:vipCharacterSwing 3.5s ease-in-out infinite;display:inline-block;" title="Personagem Animado na Logo">${esc(t.climberEmoji || t.mascotEmoji)}</span>
+                <span>${esc(t.mascotEmoji)}</span>
+              </div>
             </div>
             <div class="vip-theme-card-body">
               <div>
@@ -2734,7 +2858,7 @@
                 <p style="font-size:0.8rem;color:#475569;margin:4px 0 0 0;">
                   ${t.id === 'default'
                     ? 'Mantém 100% as cores originais (Dourado & Preto) e o layout padrão oficial do Salgados VIP.'
-                    : `Selo discreto: <strong>${esc(t.mascotEmoji)} ${esc(t.mascotTitle)}</strong>`}
+                    : `Animação na Logo: <strong>${esc(t.climberEmoji)} "${esc(t.climberSpeech)}"</strong> + ${esc(t.paradeEmojis)}`}
                 </p>
               </div>
               <button type="button" class="${isSelected ? 'btn-primary' : 'btn-secondary'} btn-sm" style="width:100%;margin-top:10px;justify-content:center;" onclick="window.VIPMarketing.selectSeasonalTheme('${esc(t.id)}')">
@@ -2797,18 +2921,30 @@
                 Sugestão da IA para a data de hoje: <strong>${esc(suggestedTheme.mascotEmoji)} ${esc(suggestedTheme.name)}</strong>
               </small>
             </div>
-            <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
-              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+            <div style="display:flex;gap:0.85rem;flex-wrap:wrap;align-items:center;">
+              <label style="font-size:0.8rem;font-weight:800;color:#b45309;background:#fffbeb;padding:4px 10px;border-radius:8px;border:1px solid #fde68a;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showLogoClimber !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showLogoClimber', this.checked)">
+                🎅 Personagem Descendo da Logo
+              </label>
+              <label style="font-size:0.8rem;font-weight:800;color:#0369a1;background:#f0f9ff;padding:4px 10px;border-radius:8px;border:1px solid #bae6fd;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showHeaderParticles !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showHeaderParticles', this.checked)">
+                ❄️ Efeitos/Partículas no Topo
+              </label>
+              <label style="font-size:0.8rem;font-weight:800;color:#15803d;background:#f0fdf4;padding:4px 10px;border-radius:8px;border:1px solid #bbf7d0;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showHeaderParade !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showHeaderParade', this.checked)">
+                🦌 Passarela Animada no Banner
+              </label>
+              <label style="font-size:0.8rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
                 <input type="checkbox" ${tc.showMascotBadge !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showMascotBadge', this.checked)">
-                Selo/Personagem no Topo
+                Selo no Topo
               </label>
-              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <label style="font-size:0.8rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
                 <input type="checkbox" ${tc.showSeasonalStrip !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showSeasonalStrip', this.checked)">
-                Faixa de Saudação Fina
+                Faixa de Saudação
               </label>
-              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+              <label style="font-size:0.8rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
                 <input type="checkbox" ${tc.showCornerMascot !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showCornerMascot', this.checked)">
-                Mascote Discreto no Canto
+                Mascote no Canto
               </label>
             </div>
           </div>

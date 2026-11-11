@@ -1109,3 +1109,187 @@
   }
 }
 
+/* ------------------------------------------------------------------------------
+   4. ANIMAÇÕES ESPECIAIS NA LOGO, PERSONAGEM DESCENDO & PARTÍCULAS NO TOPO
+   ------------------------------------------------------------------------------ */
+#store-logo-wrapper {
+  position: relative !important;
+  overflow: visible !important;
+}
+
+#store-logo-img {
+  border-radius: 20px;
+}
+
+/* Gorro / Chapéu / Coroa sobre a quina superior da Logo */
+.vip-logo-crown-cap {
+  position: absolute;
+  top: -18px;
+  right: -14px;
+  font-size: 2.1rem;
+  line-height: 1;
+  z-index: 15;
+  pointer-events: none;
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.35));
+  animation: vipCapTilt 2.8s ease-in-out infinite;
+}
+
+@keyframes vipCapTilt {
+  0%, 100% { transform: rotate(12deg) scale(1); }
+  50% { transform: rotate(22deg) scale(1.08); }
+}
+
+/* Personagem Descendo de Corda / Paraquedas da Logo (ex: Papai Noel, Fantasminha, Coelhinho) */
+.vip-logo-climber-wrap {
+  position: absolute;
+  left: -26px;
+  top: 12px;
+  width: 44px;
+  height: 145px;
+  z-index: 16;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.vip-climber-rope {
+  width: 2.5px;
+  background: repeating-linear-gradient(
+    to bottom,
+    #fef08a 0px,
+    #fef08a 5px,
+    #d97706 5px,
+    #d97706 10px
+  );
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  animation: vipRopeDrop 4.5s ease-in-out infinite;
+  transform-origin: top center;
+}
+
+.vip-climber-character {
+  font-size: 2.15rem;
+  line-height: 1;
+  filter: drop-shadow(0 6px 10px rgba(0, 0, 0, 0.45));
+  animation: vipCharacterSwing 4.5s ease-in-out infinite;
+  position: relative;
+}
+
+.vip-climber-speech {
+  position: absolute;
+  left: 36px;
+  top: -6px;
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+  border: 1.5px solid var(--primary-gold, #f59e0b);
+  animation: vipSpeechFade 4.5s ease-in-out infinite;
+}
+
+@keyframes vipRopeDrop {
+  0%, 100% { height: 14px; }
+  45%, 65% { height: 86px; }
+}
+
+@keyframes vipCharacterSwing {
+  0%, 100% { transform: rotate(-8deg) scale(0.92); }
+  25% { transform: rotate(10deg) scale(1); }
+  50% { transform: rotate(-6deg) scale(1.08); }
+  75% { transform: rotate(8deg) scale(1); }
+}
+
+@keyframes vipSpeechFade {
+  0%, 25%, 90%, 100% { opacity: 0; transform: translateY(4px) scale(0.85); }
+  40%, 75% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Partículas / Efeitos Flutuantes Confinados Apenas ao Banner do Topo (Sem Poluir o Cardápio!) */
+.vip-header {
+  overflow: hidden;
+}
+
+.vip-header-particles-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.vip-header .header-container {
+  position: relative;
+  z-index: 5;
+}
+
+.vip-header-particle {
+  position: absolute;
+  top: -32px;
+  user-select: none;
+  pointer-events: none;
+  opacity: 0.72;
+  animation-name: vipParticleFall;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes vipParticleFall {
+  0% {
+    transform: translateY(-20px) translateX(0) rotate(0deg);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.78;
+  }
+  85% {
+    opacity: 0.78;
+  }
+  100% {
+    transform: translateY(310px) translateX(28px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Passarela Animada no Rodapé do Banner Topo (ex: Trenó, Coelhinho, Fantasminha passeando) */
+.vip-header-parade-track {
+  position: absolute;
+  bottom: 4px;
+  left: 0;
+  width: 100%;
+  height: 28px;
+  pointer-events: none;
+  z-index: 4;
+  overflow: hidden;
+}
+
+.vip-header-parade-runner {
+  position: absolute;
+  bottom: 0;
+  font-size: 1.25rem;
+  white-space: nowrap;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45));
+  animation: vipParadeAcross 16s linear infinite;
+}
+
+@keyframes vipParadeAcross {
+  0% { left: -140px; transform: translateY(0); }
+  25% { transform: translateY(-3px); }
+  50% { transform: translateY(0); }
+  75% { transform: translateY(-3px); }
+  100% { left: calc(100% + 140px); transform: translateY(0); }
+}
+
+@media (max-width: 640px) {
+  .vip-logo-climber-wrap {
+    left: -18px;
+  }
+  .vip-climber-character {
+    font-size: 1.85rem;
+  }
+}
+
+
