@@ -1,24 +1,25 @@
 /**
  * ==============================================================================
- * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v52.1)
+ * SALGADOS VIP - MOTOR AUTÔNOMO DE IMPRESSÃO TÉRMICA & COMANDAS (v59.0)
  * ==============================================================================
  * Módulo 100% Isolado: window.VIPThermalPrinter / window.VIPWebPrinter
  *
- * CARACTERÍSTICAS DE ARQUITETURA & BLINDAGEM:
- * 1. IMPRESSÃO SILENCIOSA E DIRETA (ZERO JANELAS / ZERO CONFIRMAÇÕES):
- *    - Prioridade 1: Spooler Local Windows nativo (Porta 18181 via Agente de Impressão).
- *      Envia diretamente para a fila de impressão do Windows sem abrir nenhuma caixa de diálogo.
- *    - Prioridade 2: Conexão Direta WebUSB (ESC/POS no cabo USB sem programas externos).
- *    - Prioridade 3: Conexão Direta WebSerial (Portas COM / Serial).
- *    - Prioridade 4: Motor Universal em Iframe Isolado (#vip-printer-iframe), garantindo
- *      que APENAS o cupom térmico seja impresso e JAMAIS a página ou o card de pedidos.
- * 2. TRATAMENTO EXPLÍCITO DE 2ª VIA / REIMPRESSÃO:
- *    - Ao clicar no botão imprimir de um card já registrado, identifica como reimpressão
- *      e emite o cabeçalho "[ 2ª VIA - REIMPRESSÃO / CONTROLE ]" ou "[ 2ª VIA - CLIENTE ]".
- * 3. PARIDADE VISUAL RIGOROSA:
- *    - A impressão na bobina é idêntica à Prévia Ao Vivo das configurações.
- * 4. PÁGINA ÚNICA CONTÍNUA:
- *    - Zero quebras de página fantasmas (eliminação definitiva do bug de 3 páginas).
+ * CARACTERÍSTICAS DE ARQUITETURA & BLINDAGEM (v59.0):
+ * 1. PARIDADE VISUAL 100% FIEL À PRÉVIA DO CUPOM:
+ *    - Eliminação definitiva da impressão em texto puro estreito (Out-Printer 16 col)
+ *      que cortava palavras e adicionava margens de 1 polegada (25.4mm) nas laterais.
+ *    - Tanto no Motor Gráfico GDI+ Windows (Porta 18181 v59.0) quanto no Motor
+ *      Universal em Iframe Isolado (#vip-printer-iframe), o cupom sai exatamente
+ *      como na Prévia Ao Vivo (Logo, Cabeçalho em Negrito, Tarja Preta de Bebida
+ *      Gelada, Sabores em Destaque ▶ 20x, Checklist Tracejado, Caixa do Motoboy,
+ *      Subtotal Real + Desconto de Cupom + Taxa de Entrega + Total).
+ * 2. CORREÇÃO DE MULTIPLICADOR (FIM DO "1x 2x Kit...") E SUBTOTAL REAL:
+ *    - Reconhece quando o item já possui prefixo multiplicador ("2x Kit 20...")
+ *      sem duplicar "1x 2x".
+ *    - Calcula automaticamente o Subtotal real somando os itens caso order.subtotal
+ *      não esteja preenchido, e exibe linha de Desconto/Cupom quando aplicável.
+ * 3. PÁGINA ÚNICA CONTÍNUA COM MARGEM ZERO (0mm):
+ *    - Aproveitamento total da largura da bobina (80mm / 58mm) sem quebras fantasmas.
  */
 
 (function () {
@@ -66,7 +67,15 @@
 
     // Formata data e hora legível
     formatDateTime(ts) {
-      if (!ts) return new Date().toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+      if (!ts) {
+        return new Date().toLocaleString("pt-BR", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+      }
       const d = new Date(ts);
       if (isNaN(d.getTime())) return String(ts);
       return d.toLocaleString("pt-BR", {
@@ -78,13 +87,57 @@
       });
     },
 
+    // Formata o título do item sem duplicar "1x 2x Kit..." quando já houver multiplicador
+    formatItemTitle(item) {
+      if (!item) return "1x Item do Cardápio";
+      const qty = Number(item.quantity) || 1;
+      const rawName = String(item.name || item.kitName || "Item do Cardápio").trim();
+      if (/^\d+\s*x\s+/i.test(rawName)) {
+        if (qty <= 1) return rawName;
+        return `${qty}x (${rawName})`;
+      }
+      return `${qty}x ${rawName}`;
+    },
+
+    // Calcula Subtotal real, Desconto (Cupom / Happy Hour), Taxa de Entrega e Total
+    calculateOrderTotals(ord) {
+      const order = ord || {};
+      const itemsSum = (order.items || []).reduce((acc, item) => {
+        const qty = Number(item.quantity) || 1;
+        const itemPrice = Number(
+          item.totalPrice !== undefined ? item.totalPrice :
+          item.finalPrice !== undefined ? item.finalPrice :
+          (item.price ? Number(item.price) * qty : 0)
+        ) || 0;
+        return acc + itemPrice;
+      }, 0);
+
+      const rawSubtotal = Number(order.subtotal || order.subtotalAmount || 0);
+      const subtotalNum = rawSubtotal > 0 ? rawSubtotal : itemsSum;
+      const deliveryFeeNum = Number(order.deliveryFee ?? order.delivery_fee ?? 0) || 0;
+      const rawTotal = Number(order.totalAmount ?? order.total_amount ?? order.total ?? 0);
+      const totalNum = rawTotal > 0 ? rawTotal : Math.max(0, subtotalNum + deliveryFeeNum);
+
+      const explicitDiscount = Number(order.discountAmount ?? order.discount ?? order.couponDiscount ?? 0) || 0;
+      const impliedDiscount = Math.max(0, Number(((subtotalNum + deliveryFeeNum) - totalNum).toFixed(2)));
+      const discountNum = explicitDiscount > 0 ? explicitDiscount : (impliedDiscount >= 0.05 ? impliedDiscount : 0);
+
+      return {
+        subtotalNum,
+        deliveryFeeNum,
+        discountNum,
+        totalNum,
+        couponCode: order.couponCode || order.coupon || ""
+      };
+    },
+
     // Detecta se um item é bebida gelada
     isDrink(item) {
       if (!item) return false;
-      const name = String(item.name || "").toLowerCase();
+      const name = String(item.name || item.kitName || "").toLowerCase();
       const catId = String(item.categoryId || "").toLowerCase();
       if (/bebida|refrigerante|suco|cerveja|água|agua|refri/i.test(catId)) return true;
-      if (/coca|guaraná|guarana|fanta|pepsi|sprite|schweppes|heineken|antarctica|brahma|suco|água|agua|mate|del valle|tonica|red bull|monster|cerveja|lata|latão|2l|1\.5l|600ml|350ml/i.test(name)) {
+      if (/coca|guaraná|guarana|fanta|pepsi|sprite|schweppes|heineken|antarctica|brahma|suco|água|agua|mate|del valle|tonica|red bull|monster|cerveja|lata|latão|2l|1\.5l|600ml|350ml|285ml|copo/i.test(name)) {
         return true;
       }
       return false;
@@ -125,7 +178,8 @@
       const fontSizeVal = pCfg.fontSize || "medium";
       const fontWeightVal = pCfg.fontWeight || "bold";
       const lineSpacingVal = pCfg.lineSpacing || "normal";
-      const widthMmVal = parseInt(pCfg.printableWidthMm) || (pCfg.paperWidth === "58mm" ? 50 : 76);
+      const paperWidthVal = pCfg.paperWidth || "80mm";
+      const widthMmVal = parseInt(pCfg.printableWidthMm) || (paperWidthVal === "58mm" ? 50 : 76);
       const marginMmVal = pCfg.marginSideMm !== undefined ? parseInt(pCfg.marginSideMm) : 2;
 
       let fontFamCss = "'Consolas', 'Courier New', Courier, monospace";
@@ -154,7 +208,8 @@
         fontWeight: fontWeightCss,
         lineHeight: lineHeightCss,
         widthMm: widthMmVal,
-        marginMm: marginMmVal
+        marginMm: marginMmVal,
+        paperWidth: paperWidthVal
       };
     },
 
@@ -219,7 +274,7 @@
       const totalDrinkUnits = drinks.reduce((acc, d) => acc + (d.quantity || 1), 0);
 
       const drinksBannerHtml = (highlightDrinks && hasDrinks) ? `
-        <div class="receipt-drink-pill-banner" style="border: 2px solid #000; background: #000; color: #fff !important; text-align: center; font-weight: 900; font-size: 9.5pt; padding: 3px 4px; margin: 5px 0; letter-spacing: 0.5px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+        <div class="receipt-drink-pill-banner" style="border: 2px solid #000; background: #000 !important; color: #fff !important; text-align: center; font-weight: 900; font-size: 9.5pt; padding: 3px 4px; margin: 5px 0; letter-spacing: 0.5px; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
           *** 🥤 PEDIDO CONTÉM BEBIDA GELADA (${totalDrinkUnits} UN) ***
         </div>
       ` : "";
@@ -227,32 +282,36 @@
       // 4. Linhas de Itens
       let itemsRowsHtml = "";
       (ord.items || []).forEach((item) => {
-        const qty = item.quantity || 1;
-        const name = item.name || item.kitName || "Item do Cardápio";
-        const priceNum = Number(item.totalPrice || item.finalPrice || (item.price ? item.price * qty : 0)) || 0;
+        const qty = Number(item.quantity) || 1;
+        const displayTitle = this.formatItemTitle(item);
+        const priceNum = Number(
+          item.totalPrice !== undefined ? item.totalPrice :
+          item.finalPrice !== undefined ? item.finalPrice :
+          (item.price ? Number(item.price) * qty : 0)
+        ) || 0;
         const priceFormatted = this.formatMoney(priceNum);
         const itemIsDrink = this.isDrink(item);
 
         if (itemIsDrink && highlightDrinks) {
           itemsRowsHtml += `
-            <tr class="receipt-drink-item-row" style="background: #f4f4f4; border-top: 1px solid #000; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
-              <td colspan="2" class="receipt-item-desc receipt-drink-name" style="padding: 4px 2px; font-weight: 900; font-size: 10.5pt;">
-                🥤 [BEBIDA GELADA] ${qty}x ${name}
+            <tr class="receipt-drink-item-row" style="background: #f4f4f4 !important; border-top: 1px solid #000; border-bottom: 1px solid #000; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+              <td colspan="2" class="receipt-item-desc receipt-drink-name" style="padding: 4px 2px; font-weight: 900; font-size: 10.5pt; word-break: break-word;">
+                🥤 [BEBIDA GELADA] ${displayTitle}
                 <span class="receipt-drink-subhighlight" style="display: block; margin-top: 2px; font-size: 8.5pt; font-weight: 900;">➔ PEGAR NA GELADEIRA ANTES DE ENVIAR</span>
               </td>
-              <td style="text-align: right; font-weight: bold; padding: 4px 2px; white-space: nowrap;">${priceFormatted}</td>
+              <td style="text-align: right; font-weight: 900; padding: 4px 2px; white-space: nowrap; vertical-align: top; width: 28%;">${priceFormatted}</td>
             </tr>
           `;
         } else {
           itemsRowsHtml += `
             <tr>
-              <td colspan="2" class="receipt-item-desc" style="padding: 3px 2px; font-weight: bold;">${qty}x ${name}</td>
-              <td style="text-align: right; font-weight: bold; padding: 3px 2px; white-space: nowrap;">${priceFormatted}</td>
+              <td colspan="2" class="receipt-item-desc" style="padding: 3px 2px; font-weight: 900; word-break: break-word;">${displayTitle}</td>
+              <td style="text-align: right; font-weight: 900; padding: 3px 2px; white-space: nowrap; vertical-align: top; width: 28%;">${priceFormatted}</td>
             </tr>
           `;
         }
 
-        // Sabores, Molhos e Distribuição
+        // Sabores, Itens de Combo, Molhos e Distribuição
         let subDetailsHtml = "";
         if (Array.isArray(item.flavors) && item.flavors.length > 0) {
           item.flavors.forEach((f) => {
@@ -270,6 +329,17 @@
               <span class="receipt-flavor-qty" style="font-size: 12pt; font-weight: 900; display: inline-block;">▶</span> Sabor: <strong>${item.selectedFlavor}</strong>
             </div>
           `;
+        }
+
+        if (Array.isArray(item.items) && item.items.length > 0) {
+          item.items.forEach((ci) => {
+            const cqty = ci.quantity || 1;
+            subDetailsHtml += `
+              <div class="receipt-extra-line" style="font-size: 9.5pt; font-weight: 800; color: #000; margin-top: 2px;">
+                • ${cqty}x ${ci.name}
+              </div>
+            `;
+          });
         }
 
         if (Array.isArray(item.sauces) && item.sauces.length > 0) {
@@ -338,10 +408,8 @@
         </div>
       ` : "";
 
-      // 7. Totais
-      const subtotalNum = Number(ord.subtotal || ord.subtotalAmount || (ord.totalAmount ? ord.totalAmount - (ord.deliveryFee || 0) : 0)) || 0;
-      const deliveryFeeNum = Number(ord.deliveryFee || 0);
-      const totalNum = Number(ord.totalAmount || ord.total || 0);
+      // 7. Totais (com cálculo garantido de Subtotal e Desconto/Cupom)
+      const { subtotalNum, deliveryFeeNum, discountNum, totalNum, couponCode } = this.calculateOrderTotals(ord);
 
       // 8. Bloco do Motoboy
       let motoboyBoxHtml = "";
@@ -349,7 +417,10 @@
         const payMethod = ord.paymentMethod || "A Definir";
         const isCash = /dinheiro|especie|espécie/i.test(payMethod);
         const isPixPay = /pix/i.test(payMethod);
-        const changeForNum = Number(ord.changeFor || 0);
+        const rawChange = ord.changeFor || ord.cashChangeFor || 0;
+        const changeForNum = typeof rawChange === "string"
+          ? (parseFloat(rawChange.replace(/[^\d,.-]/g, "").replace(",", ".")) || 0)
+          : (Number(rawChange) || 0);
         const changeDue = changeForNum > totalNum ? (changeForNum - totalNum) : 0;
 
         let badgeText = "COBRAR DO CLIENTE NA ENTREGA";
@@ -390,7 +461,7 @@
             <div class="motoboy-box-header" style="font-size: 10pt; font-weight: 900; letter-spacing: 0.5px; margin-bottom: 4px; border-bottom: 1px solid #000; padding-bottom: 3px;">
               *** ATENÇÃO MOTOBOY: ${payMethod.toUpperCase()} ***
             </div>
-            <div class="motoboy-box-badge" style="background: #000; color: #fff !important; font-size: 10.5pt; font-weight: 900; padding: 4px 6px; margin: 3px 0 5px 0; display: block; width: 100%; box-sizing: border-box; text-transform: uppercase; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
+            <div class="motoboy-box-badge" style="background: #000 !important; color: #fff !important; font-size: 10.5pt; font-weight: 900; padding: 4px 6px; margin: 3px 0 5px 0; display: block; width: 100%; box-sizing: border-box; text-transform: uppercase; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important;">
               ${badgeText}
             </div>
             <div class="motoboy-box-amount" style="font-size: 13pt; font-weight: 900; margin: 4px 0;">
@@ -418,13 +489,13 @@
         `;
       }
 
-      // 10. Endereço formatado com detalhes
+      // 10. Endereço formatado completo (sem truncar bairro ou referência)
       let addressHtml = "";
       if (isDelivery) {
         const addr = ord.customer?.address || "Endereço não informado";
         const ref = ord.customer?.reference ? `<br><small><strong>REF:</strong> ${ord.customer.reference}</small>` : "";
         addressHtml = `
-          <div style="margin-top: 2px;">
+          <div style="margin-top: 3px; line-height: 1.3;">
             <strong>ENDEREÇO DE ENTREGA:</strong><br>
             ${addr}
             ${ref}
@@ -432,9 +503,9 @@
         `;
       }
 
-      // Montagem do HTML completo com página única contínua (sem quebra 3 páginas)
+      // Montagem do HTML completo com página única contínua
       return `
-        <div class="receipt-copy" style="width: 100%; box-sizing: border-box; margin: 0 auto; page-break-after: avoid !important; break-inside: avoid !important;">
+        <div class="receipt-copy" style="width: 100%; box-sizing: border-box; margin: 0; page-break-after: avoid !important; break-inside: avoid !important;">
           <div class="receipt-header" style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 4px; margin-bottom: 4px;">
             ${logoHtml}
             <h2 style="font-size: 13.5pt; font-weight: 900; margin: 0 0 2px 0; letter-spacing: 0.5px;">${(storeCfg.name || "SALGADOS VIP").toUpperCase()}</h2>
@@ -472,7 +543,7 @@
           <div class="receipt-divider" style="border-top: 1px dashed #000; margin: 4px 0;"></div>
           <div class="receipt-section-title" style="font-weight: 900; text-transform: uppercase; font-size: 10pt; margin: 4px 0 2px 0; letter-spacing: 0.5px;">ITENS DO PEDIDO</div>
 
-          <table class="receipt-items-table" style="width: 100%; border-collapse: collapse; margin: 4px 0; table-layout: fixed;">
+          <table class="receipt-items-table" style="width: 100%; border-collapse: collapse; margin: 4px 0;">
             ${itemsRowsHtml}
           </table>
 
@@ -480,11 +551,17 @@
           ${notesHtml}
 
           <div class="receipt-totals" style="border-top: 2px dashed #000; padding-top: 4px; margin-top: 4px;">
-            ${deliveryFeeNum > 0 ? `
+            <div class="row" style="display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0;">
+              <span>SUBTOTAL:</span>
+              <span>${this.formatMoney(subtotalNum)}</span>
+            </div>
+            ${discountNum > 0 ? `
               <div class="row" style="display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0;">
-                <span>SUBTOTAL:</span>
-                <span>${this.formatMoney(subtotalNum)}</span>
+                <span>DESCONTO${couponCode ? ` (${couponCode})` : ""}:</span>
+                <span>- ${this.formatMoney(discountNum)}</span>
               </div>
+            ` : ""}
+            ${deliveryFeeNum > 0 ? `
               <div class="row" style="display: flex; justify-content: space-between; align-items: baseline; margin: 2px 0;">
                 <span>TAXA ENTREGA:</span>
                 <span>${this.formatMoney(deliveryFeeNum)}</span>
@@ -515,9 +592,9 @@
       `;
     },
 
-    // Gera texto ASCII estruturado (utilizado para spooler direto do Windows e fallback ESC/POS)
+    // Gera texto ASCII estruturado (utilizado apenas para WebUSB / WebSerial ESC/POS direto)
     buildPlainTextReceipt(order, cfg, printerCfg, isReprint = false) {
-      const paperWidth = parseInt(printerCfg?.textColumns) || (printerCfg?.paperWidth === "58mm" ? 30 : 40);
+      const paperWidth = parseInt(printerCfg?.textColumns) || (printerCfg?.paperWidth === "58mm" ? 32 : 42);
       const divider = "=".repeat(paperWidth);
       const thinDivider = "-".repeat(paperWidth);
 
@@ -532,7 +609,7 @@
         const sL = String(l || "");
         const sR = String(r || "");
         const space = paperWidth - sL.length - sR.length;
-        if (space <= 0) return (sL + " " + sR).substring(0, paperWidth);
+        if (space <= 0) return sL + " " + sR;
         return sL + " ".repeat(space) + sR;
       }
 
@@ -541,26 +618,23 @@
       lines.push(center(cfg.name ? cfg.name.toUpperCase() : "SALGADOS VIP"));
       lines.push(center(cfg.subtitle || "DELIVERY & BALCAO - NOVA IGUACU"));
       if (cfg.phone) lines.push(center("WhatsApp: " + cfg.phone));
+      lines.push(center(isReprint ? "[ 2a VIA - REIMPRESSAO / CONTROLE ]" : "[ 1a VIA - CONTROLE & COZINHA ]"));
       lines.push(divider);
 
       const orderId = order.id || order.orderId || "VIP-DEMO";
       const dateStr = this.formatDateTime(order.createdAt);
       lines.push(line(`PEDIDO #${orderId}`, dateStr));
 
-      if (isReprint) {
-        lines.push(center("*** [ 2a VIA - REIMPRESSAO ] ***"));
-      }
-
-      lines.push(line("CLIENTE:", (order.customer?.name || "Cliente").substring(0, 18)));
+      lines.push(line("CLIENTE:", order.customer?.name || "Cliente"));
       if (order.customer?.phone) lines.push(line("CONTATO:", order.customer.phone));
 
       const isDelivery = order.fulfillment === "Entrega" || order.customer?.fulfillment !== "Retirada";
       lines.push(line("MODALIDADE:", isDelivery ? "MOTO ENTREGA" : "RETIRADA BALCAO"));
 
       if (isDelivery && order.customer?.address) {
-        lines.push(`ENDERECO: ${order.customer.address.substring(0, paperWidth - 10)}`);
+        lines.push(`ENDERECO: ${order.customer.address}`);
         if (order.customer?.reference) {
-          lines.push(`REF: ${order.customer.reference.substring(0, paperWidth - 5)}`);
+          lines.push(`REF: ${order.customer.reference}`);
         }
       }
 
@@ -569,20 +643,28 @@
         lines.push(thinDivider);
         lines.push(center("*** CONTEM BEBIDA GELADA ***"));
         drinks.forEach((d) => lines.push(`  [ ] ${d.quantity}x ${d.name}`));
-        lines.push(thinDivider);
       }
 
       lines.push(thinDivider);
       lines.push(center("[ ITENS DO PEDIDO ]"));
       (order.items || []).forEach((item) => {
-        const qty = item.quantity || 1;
-        const name = (item.name || item.kitName || "Item").substring(0, paperWidth - 14);
-        const price = this.formatMoney(item.totalPrice || item.finalPrice || (item.price ? item.price * qty : 0));
-        lines.push(line(`${qty}x ${name}`, price));
+        const qty = Number(item.quantity) || 1;
+        const displayTitle = this.formatItemTitle(item);
+        const price = this.formatMoney(
+          item.totalPrice !== undefined ? item.totalPrice :
+          item.finalPrice !== undefined ? item.finalPrice :
+          (item.price ? Number(item.price) * qty : 0)
+        );
+        lines.push(line(displayTitle, price));
 
         if (Array.isArray(item.flavors)) {
           item.flavors.forEach((f) => {
-            if (f.quantity) lines.push(`   > ${f.quantity}x ${f.name}`);
+            if (f.quantity) lines.push(`   > ${f.quantity}x ${String(f.name || "").toUpperCase()}`);
+          });
+        }
+        if (Array.isArray(item.items)) {
+          item.items.forEach((ci) => {
+            lines.push(`   • ${ci.quantity || 1}x ${ci.name}`);
           });
         }
         if (Array.isArray(item.sauces)) {
@@ -595,17 +677,25 @@
         lines.push(`OBS: ${order.notes || order.customer?.notes}`);
       }
 
+      const { subtotalNum, deliveryFeeNum, discountNum, totalNum, couponCode } = this.calculateOrderTotals(order);
       lines.push(thinDivider);
-      if (order.deliveryFee > 0) {
-        lines.push(line("Subtotal:", this.formatMoney(order.subtotalAmount || 0)));
-        lines.push(line("Taxa Entrega:", this.formatMoney(order.deliveryFee)));
+      lines.push(line("Subtotal:", this.formatMoney(subtotalNum)));
+      if (discountNum > 0) {
+        lines.push(line(`Desconto${couponCode ? ` (${couponCode})` : ""}:`, `- ${this.formatMoney(discountNum)}`));
       }
-      lines.push(line("TOTAL DO PEDIDO:", this.formatMoney(order.totalAmount || 0)));
+      if (deliveryFeeNum > 0) {
+        lines.push(line("Taxa Entrega:", this.formatMoney(deliveryFeeNum)));
+      }
+      lines.push(line("TOTAL DO PEDIDO:", this.formatMoney(totalNum)));
       lines.push(line("PAGAMENTO:", order.paymentMethod || "A Definir"));
 
-      if (order.changeFor) {
-        lines.push(line("Troco para:", this.formatMoney(order.changeFor)));
-        const chgDue = order.changeFor - (order.totalAmount || 0);
+      const rawChange = order.changeFor || order.cashChangeFor || 0;
+      const changeForNum = typeof rawChange === "string"
+        ? (parseFloat(rawChange.replace(/[^\d,.-]/g, "").replace(",", ".")) || 0)
+        : (Number(rawChange) || 0);
+      if (changeForNum > 0) {
+        lines.push(line("Troco para:", this.formatMoney(changeForNum)));
+        const chgDue = changeForNum - totalNum;
         if (chgDue > 0) lines.push(line("LEVAR DE TROCO:", this.formatMoney(chgDue)));
       }
 
@@ -624,17 +714,7 @@
       const GS = "\x1D";
       let cmd = "";
 
-      cmd += ESC + "@";
-      cmd += ESC + "a\x01";
-      cmd += ESC + "E\x01";
-      cmd += GS + "!\x11";
-      cmd += (cfg.name ? cfg.name.toUpperCase() : "SALGADOS VIP") + "\n";
-      cmd += GS + "!\x00";
-      cmd += ESC + "E\x00";
-      cmd += (cfg.subtitle || "DELIVERY & BALCAO - NOVA IGUACU") + "\n";
-      if (cfg.phone) cmd += "WhatsApp: " + cfg.phone + "\n";
-      cmd += "----------------------------------------\n";
-
+      cmd += ESC + "@"; // Reset hardware printer (garante fonte normal 42/48 colunas, sem largura dupla travada)
       const plainText = this.buildPlainTextReceipt(order, cfg, printerCfg, isReprint);
       cmd += ESC + "a\x00";
       cmd += plainText;
@@ -655,6 +735,7 @@
     isPrinting: false,
     installedSystemPrinters: [],
     spoolerOnline: false,
+    spoolerGraphicalSupported: false,
 
     // Inicialização autônoma ao carregar
     async init() {
@@ -722,14 +803,16 @@
         if (res.ok) {
           const data = await res.json();
           this.spoolerOnline = true;
+          this.spoolerGraphicalSupported = Boolean(data.graphicalEngine === true);
           this.installedSystemPrinters = Array.isArray(data.installedPrinters) ? data.installedPrinters : [];
-          console.log("[VIPThermalPrinter] Spooler Windows detectado online. Impressora padrão:", data.defaultPrinter);
+          console.log("[VIPThermalPrinter] Spooler Windows detectado online. Motor Gráfico GDI+:", this.spoolerGraphicalSupported);
           this.populateInstalledPrintersDropdown(data.defaultPrinter);
           this.updateUiStatus();
           return true;
         }
       } catch (err) {
         this.spoolerOnline = false;
+        this.spoolerGraphicalSupported = false;
       }
       return false;
     },
@@ -836,19 +919,19 @@
           statusBox.innerHTML = `<em>Modo WebUSB selecionado (Nenhuma impressora emparelhada. Clique em 'Conectar').</em>`;
         } else if (localTarget === "webserial") {
           statusBox.innerHTML = `<strong>Conectada (Porta Serial / COM):</strong> Pronta para envio direto ESC/POS.`;
-        } else if (this.spoolerOnline) {
-          statusBox.innerHTML = `<strong>Spooler Windows Ativo (Zero Janelas):</strong> Envio direto para ${localTarget === "windows_default" ? "impressora padrão" : localTarget}.`;
+        } else if (this.spoolerOnline && this.spoolerGraphicalSupported) {
+          statusBox.innerHTML = `<strong>Motor Gráfico GDI+ Ativo (Zero Janelas):</strong> Layout 100% idêntico à prévia do cupom (${localTarget === "windows_default" ? "impressora padrão" : localTarget}).`;
         } else {
-          statusBox.innerHTML = `<strong>Modo Universal Silencioso:</strong> Impressão direta sem interferência de telas.`;
+          statusBox.innerHTML = `<strong>Motor Gráfico de Cupom Ativo:</strong> Impressão fiel à Prévia do Cupom (Largura Total 0mm Margem).`;
         }
       }
 
       if (badge) {
-        if (this.spoolerOnline) {
-          badge.innerHTML = `<i class="fa-solid fa-bolt"></i> Impressão Silenciosa Direta Ativa`;
+        if (this.spoolerOnline && this.spoolerGraphicalSupported) {
+          badge.innerHTML = `<i class="fa-solid fa-bolt"></i> Impressão Gráfica Silenciosa Ativa`;
           badge.className = "badge-silent-active";
         } else {
-          badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Impressão Universal Ativa`;
+          badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Impressão Fiel à Prévia Ativa`;
           badge.className = "badge-silent-active";
         }
       }
@@ -931,7 +1014,7 @@
     },
 
     // ==========================================================================
-    // 4. DISPARO REAL DE IMPRESSÃO (UNIVERSAL, INDEPENDENTE & PARIDADE TOTAL)
+    // 4. DISPARO REAL DE IMPRESSÃO (100% FIEL À PRÉVIA DO CUPOM)
     // ==========================================================================
     async printOrderReceipt(orderId, isAutoPrint = false, event = null, mockOrder = null) {
       if (this.isPrinting) return;
@@ -967,39 +1050,60 @@
         const numCopies = Math.max(1, parseInt(printerCfg.copies) || 1);
 
         // ----------------------------------------------------------------------
-        // CANAL 1: SPOOLER NATIVO DO WINDOWS (PORTA 18181 - ZERO JANELAS / DIRETO)
+        // CANAL 1: MOTOR GRÁFICO GDI+ WINDOWS (PORTA 18181 v59.0+ COM PARIDADE VISUAL)
+        // IMPORTANTE: Ignora agentes antigos v1 (Out-Printer texto puro de 16 colunas)
+        // para garantir que o cupom SEMPRE saia idêntico à Prévia do Cupom!
         // ----------------------------------------------------------------------
         try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 1200);
-
-          const plainText = ReceiptBuilder.buildPlainTextReceipt(order, cfg, printerCfg, isReprint);
-          const response = await fetch("http://127.0.0.1:18181/print", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              orderId: order.id,
-              receiptText: plainText,
-              copies: numCopies,
-              printerName: (localTarget === "windows_default") ? null : localTarget
-            }),
-            signal: controller.signal
+          const statusCtrl = new AbortController();
+          const statusTimeout = setTimeout(() => statusCtrl.abort(), 900);
+          const statusRes = await fetch("http://127.0.0.1:18181/status", {
+            method: "GET",
+            headers: { "Accept": "application/json" },
+            signal: statusCtrl.signal
           });
-          clearTimeout(timeoutId);
+          clearTimeout(statusTimeout);
 
-          if (response.ok) {
-            const resData = await response.json();
-            if (resData.success) {
-              this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Spooler Windows" : "Spooler Windows");
-              return;
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData && statusData.graphicalEngine === true) {
+              const printCtrl = new AbortController();
+              const printTimeout = setTimeout(() => printCtrl.abort(), 4500);
+
+              const plainText = ReceiptBuilder.buildPlainTextReceipt(order, cfg, printerCfg, isReprint);
+              const response = await fetch("http://127.0.0.1:18181/print", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  orderId: order.id,
+                  renderMode: "graphical_gdi",
+                  order: order,
+                  storeCfg: cfg,
+                  printerCfg: printerCfg,
+                  isReprint: isReprint,
+                  receiptText: plainText,
+                  copies: numCopies,
+                  printerName: (localTarget === "windows_default") ? null : localTarget
+                }),
+                signal: printCtrl.signal
+              });
+              clearTimeout(printTimeout);
+
+              if (response.ok) {
+                const resData = await response.json();
+                if (resData.success) {
+                  this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Gráfica GDI+" : "Motor Gráfico GDI+");
+                  return;
+                }
+              }
             }
           }
         } catch (spoolerErr) {
-          // Spooler não respondeu nesta máquina; prossegue para WebUSB ou Motor Iframe
+          // Segue para WebUSB, WebSerial ou Motor Gráfico em Iframe Isolado
         }
 
         // ----------------------------------------------------------------------
-        // CANAL 2: TENTATIVA VIA WEBUSB DIRETO (Zero Programas, Zero Janelas)
+        // CANAL 2: TENTATIVA VIA WEBUSB DIRETO (Quando selecionado explicitamente)
         // ----------------------------------------------------------------------
         if (localTarget === "webusb" && this.pairedUsbDevice) {
           try {
@@ -1014,12 +1118,12 @@
             this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via WebUSB" : "WebUSB");
             return;
           } catch (usbErr) {
-            console.warn("[VIPThermalPrinter] Falha WebUSB, recorrendo ao motor universal:", usbErr);
+            console.warn("[VIPThermalPrinter] Falha WebUSB, recorrendo ao motor gráfico de cupom:", usbErr);
           }
         }
 
         // ----------------------------------------------------------------------
-        // CANAL 3: TENTATIVA VIA WEBSERIAL DIRETO (Porta COM / Cabo Serial)
+        // CANAL 3: TENTATIVA VIA WEBSERIAL DIRETO (Quando selecionado explicitamente)
         // ----------------------------------------------------------------------
         if (localTarget === "webserial" && this.pairedSerialPort) {
           try {
@@ -1033,12 +1137,13 @@
             this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Serial" : "Serial");
             return;
           } catch (serialErr) {
-            console.warn("[VIPThermalPrinter] Falha WebSerial, recorrendo ao motor universal:", serialErr);
+            console.warn("[VIPThermalPrinter] Falha WebSerial, recorrendo ao motor gráfico de cupom:", serialErr);
           }
         }
 
         // ----------------------------------------------------------------------
-        // CANAL 4: MOTOR UNIVERSAL EM IFRAME ISOLADO (JAMAIS IMPRIME O CARD OU O PAINEL)
+        // CANAL 4: MOTOR GRÁFICO FIEL À PRÉVIA DO CUPOM EM IFRAME ISOLADO
+        // Renderiza 100% o mesmo HTML/CSS da Prévia Ao Vivo com @page margin: 0mm
         // ----------------------------------------------------------------------
         const stylesObj = ReceiptBuilder.getTypographyStyles(printerCfg);
         let copiesHtml = "";
@@ -1053,9 +1158,9 @@
           receiptArea.innerHTML = copiesHtml;
         }
 
-        // 2. Imprime no iframe 100% isolado (blindagem total contra cards ou modais abertos)
+        // 2. Imprime no iframe 100% isolado (fiel à prévia do cupom)
         this.printViaIsolatedIframe(copiesHtml, stylesObj);
-        this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Universal" : "Universal");
+        this.finishPrint(order.id, isAutoPrint, isReprint ? "2ª Via Cupom Gráfico" : "Cupom Gráfico");
 
       } finally {
         setTimeout(() => {
@@ -1064,15 +1169,15 @@
       }
     },
 
-    // Injeta e dispara a impressão a partir do iframe isolado
+    // Injeta e dispara a impressão a partir do iframe isolado com 100% dos estilos da prévia
     printViaIsolatedIframe(receiptHtml, stylesObj) {
       const iframe = getOrCreatePrintIframe();
       if (!iframe || !iframe.contentWindow) {
-        // Fallback no window principal caso o iframe não esteja acessível
         setTimeout(() => { try { window.print(); } catch (e) {} }, 80);
         return;
       }
 
+      const paperSizeCss = stylesObj.paperWidth === "58mm" ? "58mm auto" : "80mm auto";
       const doc = iframe.contentWindow.document;
       doc.open();
       doc.write(`
@@ -1083,8 +1188,13 @@
           <title>Comanda Salgados VIP</title>
           <style>
             @page {
-              size: auto;
+              size: ${paperSizeCss};
               margin: 0mm !important;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             html, body {
               margin: 0 !important;
@@ -1096,14 +1206,12 @@
               min-height: 0 !important;
               max-height: none !important;
               overflow: visible !important;
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
             }
             #receipt-root {
               width: ${stylesObj.widthMm}mm;
-              max-width: ${stylesObj.widthMm}mm;
-              margin: 0 auto;
-              padding: 0 ${stylesObj.marginMm}mm;
+              max-width: 100%;
+              margin: 0 !important;
+              padding: 1mm ${stylesObj.marginMm}mm;
               box-sizing: border-box;
               font-family: ${stylesObj.fontFamily};
               font-size: ${stylesObj.fontSize};
@@ -1115,12 +1223,19 @@
             .receipt-copy {
               width: 100%;
               box-sizing: border-box;
-              margin: 0 auto !important;
+              margin: 0 !important;
               padding: 0 !important;
               page-break-after: avoid !important;
               page-break-before: avoid !important;
               page-break-inside: avoid !important;
               break-inside: avoid !important;
+            }
+            .receipt-items-table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            .receipt-items-table td {
+              vertical-align: top;
             }
             .receipt-cut-line {
               page-break-after: avoid !important;
@@ -1153,7 +1268,7 @@
           console.error("[VIPThermalPrinter] Erro no iframe print:", pErr);
           try { window.print(); } catch (e) {}
         }
-      }, 100);
+      }, 150);
     },
 
     // Finalização e gravação de status impresso
@@ -1188,6 +1303,7 @@
           fulfillment: "Entrega",
           customer: { name: "Cliente de Teste", phone: "(21) 98765-4321", address: "Av. Automóvel Clube, 500 - Centro" },
           items: [{ quantity: 1, name: "Kit 50 Salgados Degustação", finalPrice: 65, flavors: [{ name: "Coxinha", quantity: 50 }] }],
+          subtotal: 65,
           totalAmount: 65,
           paymentMethod: "Pix"
         };

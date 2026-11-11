@@ -3156,8 +3156,10 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
   lines.push(center("ITENS DO PEDIDO"));
 
   (order.items || []).forEach(item => {
+    const rawTitle = String(item.kitName || item.name || "Item").trim();
+    const displayTitle = /^\d+\s*x\s+/i.test(rawTitle) ? rawTitle : `${item.quantity || 1}x ${rawTitle}`;
     if (item.type === "kit") {
-      lines.push(line(`1x ${item.kitName || "Kit Salgados"}`, formatBRL(item.finalPrice || 0)));
+      lines.push(line(displayTitle, formatBRL(item.finalPrice || 0)));
       (item.flavors || []).forEach(f => {
         lines.push(rawLine(`  • ${f.quantity}x ${f.name}`));
       });
@@ -3166,7 +3168,10 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
         lines.push(rawLine(`  • Molho: ${sText}`));
       }
     } else if (item.type === "combo") {
-      lines.push(line(`1x ${item.name || "Combo"}`, formatBRL(item.finalPrice || 0)));
+      lines.push(line(displayTitle, formatBRL(item.finalPrice || 0)));
+      (item.flavors || []).forEach(f => {
+        lines.push(rawLine(`  • ${f.quantity}x ${f.name}`));
+      });
       (item.items || []).forEach(ci => {
         lines.push(rawLine(`  • ${ci.quantity}x ${ci.name}`));
       });
@@ -3182,8 +3187,9 @@ function buildOrderTextReceipt(order, cfg, printerCfg) {
   }
 
   lines.push(thinDivider);
+  const calcSub = Number(order.subtotal || order.subtotalAmount || (order.items || []).reduce((acc, it) => acc + (Number(it.finalPrice || it.totalPrice || ((it.price || 0) * (it.quantity || 1))) || 0), 0)) || 0;
+  lines.push(line("Subtotal:", formatBRL(calcSub)));
   if (order.deliveryFee && order.deliveryFee > 0) {
-    lines.push(line("Subtotal:", formatBRL(order.subtotalAmount || order.totalAmount || 0)));
     lines.push(line("Taxa Entrega:", formatBRL(order.deliveryFee)));
   }
   lines.push(line("TOTAL DO PEDIDO:", formatBRL(order.totalAmount || 0)));
@@ -6321,6 +6327,8 @@ if ($listener -and $listener.IsListening) {
                 $respObj = @{
                     status = "online"
                     online = $true
+                    version = "59.0"
+                    graphicalEngine = $true
                     defaultPrinter = $defaultPrinter
                     installedPrinters = $installed
                 } | ConvertTo-Json
@@ -6333,7 +6341,7 @@ if ($listener -and $listener.IsListening) {
             }
 
             if ($request.HttpMethod -eq "GET" -and $request.Url.LocalPath -eq "/ping") {
-                $respObj = @{ online = $true; service = "Salgados VIP Spooler" } | ConvertTo-Json
+                $respObj = @{ online = $true; version = "59.0"; graphicalEngine = $true; service = "Salgados VIP Spooler" } | ConvertTo-Json
                 $buf = [System.Text.Encoding]::UTF8.GetBytes($respObj)
                 $response.ContentType = "application/json; charset=utf-8"
                 $response.ContentLength64 = $buf.Length
@@ -6353,20 +6361,239 @@ if ($listener -and $listener.IsListening) {
                 $printerName = $json.printerName
                 $copies = if ($json.copies) { [int]$json.copies } else { 1 }
 
-                Write-Host "[+] Imprimindo pedido $orderId ($copies via(s))..." -ForegroundColor Cyan
-                $tempFile = [System.IO.Path]::GetTempFileName() + ".txt"
-                [System.IO.File]::WriteAllText($tempFile, $receiptText, [System.Text.Encoding]::GetEncoding(1252))
-
-                for ($i = 1; $i -le $copies; $i++) {
+                Write-Host "[+] Imprimindo comanda grafica do pedido $orderId ($copies via(s))..." -ForegroundColor Cyan
+                Add-Type -AssemblyName System.Drawing
+                for ($copyIdx = 1; $copyIdx -le $copies; $copyIdx++) {
+                    $doc = New-Object System.Drawing.Printing.PrintDocument
                     if ($printerName -and $printerName -ne "windows_default") {
-                        Get-Content -LiteralPath $tempFile | Out-Printer -Name $printerName
-                    } else {
-                        Get-Content -LiteralPath $tempFile | Out-Printer
+                        $doc.PrinterSettings.PrinterName = $printerName
                     }
-                }
-                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    $doc.OriginAtMargins = $false
+                    $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+                    $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
 
-                $respObj = @{ success = $true; orderId = $orderId; message = "Impresso com sucesso via Spooler." } | ConvertTo-Json
+                    $doc.add_PrintPage({
+                        param($sender, $e)
+                        $g = $e.Graphics
+                        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+                        $g.TextRenderingHint = [System.Drawing.Text.TextRenderingHint]::ClearTypeGridFit
+
+                        $rawW = $e.PageBounds.Width
+                        $w = if ($rawW -gt 40 -and $rawW -le 310) { $rawW - 8 } else { 276 }
+                        if ($json.printerCfg -and $json.printerCfg.paperWidth -eq "58mm") {
+                            $w = if ($rawW -gt 40 -and $rawW -le 215) { $rawW - 6 } else { 188 }
+                        }
+                        $x = 4
+                        $y = 4
+
+                        $fTitle = New-Object System.Drawing.Font("Arial", 12, [System.Drawing.FontStyle]::Bold)
+                        $fSub = New-Object System.Drawing.Font("Consolas", 8.5, [System.Drawing.FontStyle]::Bold)
+                        $fBody = New-Object System.Drawing.Font("Consolas", 9, [System.Drawing.FontStyle]::Bold)
+                        $fFlavor = New-Object System.Drawing.Font("Consolas", 10, [System.Drawing.FontStyle]::Bold)
+                        $fTotal = New-Object System.Drawing.Font("Arial", 11.5, [System.Drawing.FontStyle]::Bold)
+                        $fSmall = New-Object System.Drawing.Font("Consolas", 8, [System.Drawing.FontStyle]::Bold)
+
+                        $brushBlack = [System.Drawing.Brushes]::Black
+                        $brushWhite = [System.Drawing.Brushes]::White
+                        $brushGray = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(242, 242, 242))
+                        $penSolid = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 1.5)
+                        $penThick = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 2.5)
+                        $penDash = New-Object System.Drawing.Pen([System.Drawing.Color]::Black, 1)
+                        $penDash.DashStyle = [System.Drawing.Drawing2D.DashStyle]::Dash
+
+                        $sfCenter = New-Object System.Drawing.StringFormat
+                        $sfCenter.Alignment = [System.Drawing.StringAlignment]::Center
+                        $sfRight = New-Object System.Drawing.StringFormat
+                        $sfRight.Alignment = [System.Drawing.StringAlignment]::Far
+
+                        if ($json.order) {
+                            $ord = $json.order
+                            $sCfg = $json.storeCfg
+                            $storeName = if ($sCfg -and $sCfg.name) { $sCfg.name.ToUpper() } else { "SALGADOS VIP" }
+                            $storeSub = if ($sCfg -and $sCfg.subtitle) { $sCfg.subtitle } else { "DELIVERY & BALCAO - NOVA IGUACU" }
+                            $storeAddr = if ($sCfg -and $sCfg.address) { $sCfg.address } else { "Rua Isabel Pedrosa, 31 - Da Luz" }
+                            $storePhone = if ($sCfg -and $sCfg.phone) { $sCfg.phone } else { "(21) 98675-8102" }
+
+                            $g.DrawString($storeName, $fTitle, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 22)), $sfCenter)
+                            $y += 20
+                            $g.DrawString($storeSub, $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 15)), $sfCenter)
+                            $y += 14
+                            $g.DrawString($storeAddr, $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 15)), $sfCenter)
+                            $y += 14
+                            $g.DrawString("WhatsApp: $storePhone", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 15)), $sfCenter)
+                            $y += 16
+
+                            $viaLabel = if ($json.isReprint) { "[ 2a VIA - REIMPRESSAO / CONTROLE ]" } else { "[ 1a VIA - CONTROLE & COZINHA ]" }
+                            $g.DrawRectangle($penSolid, $x + 10, $y, $w - 20, 18)
+                            $g.DrawString($viaLabel, $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 2, $w, 16)), $sfCenter)
+                            $y += 23
+                            $g.DrawLine($penDash, $x, $y, $x + $w, $y)
+                            $y += 5
+
+                            $oid = if ($ord.id) { $ord.id } else { "VIP" }
+                            $dtStr = (Get-Date).ToString("dd/MM/yyyy HH:mm")
+                            $g.DrawString("PEDIDO: #$oid", $fBody, $brushBlack, $x, $y)
+                            $g.DrawString($dtStr, $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 1, $w, 16)), $sfRight)
+                            $y += 16
+
+                            $cName = if ($ord.customer -and $ord.customer.name) { $ord.customer.name } else { "Cliente" }
+                            $g.DrawString("CLIENTE: $cName", $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 18)))
+                            $y += 16
+                            if ($ord.customer -and $ord.customer.phone) {
+                                $g.DrawString("CONTATO: $($ord.customer.phone)", $fBody, $brushBlack, $x, $y)
+                                $y += 16
+                            }
+
+                            $isDeliv = ($ord.fulfillment -eq "Entrega") -or ($ord.customer -and $ord.customer.fulfillment -ne "Retirada")
+                            $modTxt = if ($isDeliv) { "MOTO ENTREGA EM DOMICILIO" } else { "RETIRADA NO BALCAO" }
+                            $g.DrawString("MODALIDADE: $modTxt", $fSmall, $brushBlack, $x, $y)
+                            $y += 15
+
+                            if ($isDeliv -and $ord.customer -and $ord.customer.address) {
+                                $addrTxt = "ENDERECO: $($ord.customer.address)"
+                                if ($ord.customer.reference) { $addrTxt += " (Ref: $($ord.customer.reference))" }
+                                $addrSize = $g.MeasureString($addrTxt, $fBody, $w)
+                                $g.DrawString($addrTxt, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, $addrSize.Height + 4)))
+                                $y += [int]$addrSize.Height + 4
+                            }
+
+                            $g.DrawLine($penDash, $x, $y, $x + $w, $y)
+                            $y += 4
+                            $g.DrawString("ITENS DO PEDIDO", $fBody, $brushBlack, $x, $y)
+                            $y += 17
+
+                            $itemsSum = 0.0
+                            $drinksList = @()
+                            foreach ($it in $ord.items) {
+                                $q = if ($it.quantity) { [int]$it.quantity } else { 1 }
+                                $rawN = if ($it.name) { [string]$it.name } elseif ($it.kitName) { [string]$it.kitName } else { "Item" }
+                                $dispN = if ($rawN -match "^\d+\s*x\s+") { $rawN } else { "${q}x $rawN" }
+                                $pVal = if ($null -ne $it.totalPrice) { [double]$it.totalPrice } elseif ($null -ne $it.finalPrice) { [double]$it.finalPrice } elseif ($null -ne $it.price) { [double]$it.price * $q } else { 0.0 }
+                                $itemsSum += $pVal
+                                $pStr = ("R$ {0:N2}" -f $pVal).Replace(".", "#").Replace(",", ".").Replace("#", ",")
+
+                                $isDrk = $rawN -match "(?i)coca|guarana|guaraná|fanta|pepsi|sprite|suco|agua|água|cerveja|refrigerante|2l|lata|285ml|copo"
+                                if ($isDrk) {
+                                    $drinksList += "$dispN"
+                                    $dispN = "[BEBIDA GELADA] $dispN"
+                                }
+
+                                $leftW = [int]($w * 0.72)
+                                $itSize = $g.MeasureString($dispN, $fBody, $leftW)
+                                $rowH = [Math]::Max(17, [int]$itSize.Height + 2)
+                                if ($isDrk) {
+                                    $g.FillRectangle($brushGray, $x, $y, $w, $rowH + 14)
+                                    $g.DrawLine($penSolid, $x, $y, $x + $w, $y)
+                                }
+                                $g.DrawString($dispN, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 1, $leftW, $rowH)))
+                                $g.DrawString($pStr, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 1, $w, 18)), $sfRight)
+                                $y += $rowH
+                                if ($isDrk) {
+                                    $g.DrawString("-> PEGAR NA GELADEIRA ANTES DE ENVIAR", $fSmall, $brushBlack, $x + 4, $y)
+                                    $y += 14
+                                    $g.DrawLine($penSolid, $x, $y, $x + $w, $y)
+                                    $y += 2
+                                }
+
+                                if ($it.flavors) {
+                                    foreach ($flv in $it.flavors) {
+                                        if ($flv.quantity -gt 0) {
+                                            $fTxt = "  > $($flv.quantity)x $($flv.name.ToString().ToUpper())"
+                                            $fSz = $g.MeasureString($fTxt, $fFlavor, $w - 8)
+                                            $g.DrawString($fTxt, $fFlavor, $brushBlack, (New-Object System.Drawing.RectangleF($x + 4, $y, $w - 8, $fSz.Height + 2)))
+                                            $y += [int]$fSz.Height + 1
+                                        }
+                                    }
+                                }
+                                if ($it.sauces) {
+                                    foreach ($sc in $it.sauces) {
+                                        $sq = if ($sc.quantity) { $sc.quantity } else { 1 }
+                                        $g.DrawString("  * Molho: ${sq}x $($sc.name)", $fSmall, $brushBlack, $x + 4, $y)
+                                        $y += 14
+                                    }
+                                }
+                                $y += 3
+                            }
+
+                            if ($drinksList.Count -gt 0) {
+                                $y += 2
+                                $boxH = 34 + ($drinksList.Count * 15)
+                                $g.DrawRectangle($penDash, $x, $y, $w, $boxH)
+                                $g.DrawString("*** ATENCAO: NAO ESQUECER A BEBIDA! ***", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 3, $w, 15)), $sfCenter)
+                                $g.DrawString("RETIRAR DA GELADEIRA ANTES DE ENVIAR:", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 17, $w, 14)), $sfCenter)
+                                $dy = $y + 32
+                                foreach ($dItem in $drinksList) {
+                                    $g.DrawString("[ ] -> $dItem", $fSmall, $brushBlack, $x + 6, $dy)
+                                    $dy += 15
+                                }
+                                $y += $boxH + 6
+                            }
+
+                            $g.DrawLine($penDash, $x, $y, $x + $w, $y)
+                            $y += 4
+
+                            $subVal = if ($ord.subtotal -and [double]$ord.subtotal -gt 0) { [double]$ord.subtotal } else { $itemsSum }
+                            $feeVal = if ($ord.deliveryFee) { [double]$ord.deliveryFee } else { 0.0 }
+                            $totVal = if ($ord.totalAmount -and [double]$ord.totalAmount -gt 0) { [double]$ord.totalAmount } else { $subVal + $feeVal }
+                            $discVal = [Math]::Max(0.0, [Math]::Round(($subVal + $feeVal) - $totVal, 2))
+
+                            $subStr = ("R$ {0:N2}" -f $subVal).Replace(".", "#").Replace(",", ".").Replace("#", ",")
+                            $g.DrawString("SUBTOTAL:", $fBody, $brushBlack, $x, $y)
+                            $g.DrawString($subStr, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 16)), $sfRight)
+                            $y += 16
+
+                            if ($discVal -ge 0.05) {
+                                $discStr = ("- R$ {0:N2}" -f $discVal).Replace(".", "#").Replace(",", ".").Replace("#", ",")
+                                $g.DrawString("DESCONTO / CUPOM:", $fBody, $brushBlack, $x, $y)
+                                $g.DrawString($discStr, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 16)), $sfRight)
+                                $y += 16
+                            }
+
+                            if ($feeVal -gt 0) {
+                                $feeStr = ("R$ {0:N2}" -f $feeVal).Replace(".", "#").Replace(",", ".").Replace("#", ",")
+                                $g.DrawString("TAXA ENTREGA:", $fBody, $brushBlack, $x, $y)
+                                $g.DrawString($feeStr, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 16)), $sfRight)
+                                $y += 16
+                            }
+
+                            $g.DrawLine($penSolid, $x, $y, $x + $w, $y)
+                            $y += 3
+                            $totStr = ("R$ {0:N2}" -f $totVal).Replace(".", "#").Replace(",", ".").Replace("#", ",")
+                            $g.DrawString("TOTAL DO PEDIDO:", $fTotal, $brushBlack, $x, $y)
+                            $g.DrawString($totStr, $fTotal, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 20)), $sfRight)
+                            $y += 21
+                            $g.DrawLine($penSolid, $x, $y, $x + $w, $y)
+                            $y += 4
+
+                            $payM = if ($ord.paymentMethod) { $ord.paymentMethod } else { "A Definir" }
+                            $g.DrawString("PAGAMENTO:", $fBody, $brushBlack, $x, $y)
+                            $g.DrawString($payM, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 16)), $sfRight)
+                            $y += 20
+
+                            if ($isDeliv) {
+                                $mBoxH = 68
+                                $g.DrawRectangle($penThick, $x, $y, $w, $mBoxH)
+                                $g.DrawString("*** ATENCAO MOTOBOY: $($payM.ToUpper()) ***", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 3, $w, 15)), $sfCenter)
+                                $g.FillRectangle($brushBlack, $x + 4, $y + 19, $w - 8, 18)
+                                $bTxt = if ($payM -match "(?i)pix") { "PAGAMENTO PIX (JA PAGO / CONFERIR)" } elseif ($payM -match "(?i)cart") { "COBRAR NA MAQUININHA (LEVAR CARTAO)" } else { "COBRAR DO CLIENTE NA ENTREGA" }
+                                $g.DrawString($bTxt, $fSmall, $brushWhite, (New-Object System.Drawing.RectangleF($x + 4, $y + 21, $w - 8, 16)), $sfCenter)
+                                $g.DrawString("VALOR DO PEDIDO: $totStr", $fTotal, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y + 42, $w, 20)), $sfCenter)
+                                $y += $mBoxH + 8
+                            }
+
+                            $g.DrawString("Obrigado pela preferencia!", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 15)), $sfCenter)
+                            $y += 15
+                            $g.DrawString("- - - - - CORTE DA BOBINA - - - - -", $fSmall, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 15)), $sfCenter)
+                        } else {
+                            $g.DrawString($receiptText, $fBody, $brushBlack, (New-Object System.Drawing.RectangleF($x, $y, $w, 2000)))
+                        }
+                        $e.HasMorePages = $false
+                    })
+                    $doc.Print()
+                    $doc.Dispose()
+                }
+
+                $respObj = @{ success = $true; orderId = $orderId; message = "Impresso com sucesso via Motor Grafico GDI+." } | ConvertTo-Json
                 $buf = [System.Text.Encoding]::UTF8.GetBytes($respObj)
                 $response.ContentType = "application/json; charset=utf-8"
                 $response.ContentLength64 = $buf.Length
@@ -10231,7 +10458,10 @@ window.openCustomerDetailsModal = function(customerId) {
       tbody.innerHTML = customer.orders.map(o => {
         const dateStr = o.createdAt ? new Date(o.createdAt).toLocaleDateString("pt-BR") : "--";
         const timeStr = o.createdAt ? new Date(o.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "";
-        const itemsSummary = (o.items || []).map(it => `${it.quantity || 1}x ${it.kitName || it.name}`).join(", ");
+        const itemsSummary = (o.items || []).map(it => {
+          const rawN = String(it.kitName || it.name || "Item").trim();
+          return /^\d+\s*x\s+/i.test(rawN) ? rawN : `${it.quantity || 1}x ${rawN}`;
+        }).join(", ");
 
         const statusNames = {
           novo: "Recebidos",

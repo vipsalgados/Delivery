@@ -210,17 +210,36 @@ def print_via_powershell(printer_name, text, copies=1):
     temp_file = None
     try:
         temp_fd, temp_file = tempfile.mkstemp(suffix=".txt", prefix="salgados_vip_")
-        with os.fdopen(temp_fd, "w", encoding="cp1252", errors="replace") as f:
+        with os.fdopen(temp_fd, "w", encoding="utf-8", errors="replace") as f:
             f.write(text)
 
-        cmd = f'for ($i = 1; $i -le {copies}; $i++) {{ Get-Content -LiteralPath "{temp_file}" | Out-Printer -Name "{printer_name}" }}'
+        ps_script = f"""
+Add-Type -AssemblyName System.Drawing
+$txt = [System.IO.File]::ReadAllText("{temp_file}", [System.Text.Encoding]::UTF8)
+for ($i = 1; $i -le {copies}; $i++) {{
+    $doc = New-Object System.Drawing.Printing.PrintDocument
+    $doc.PrinterSettings.PrinterName = "{printer_name}"
+    $doc.OriginAtMargins = $false
+    $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins(0, 0, 0, 0)
+    $doc.PrintController = New-Object System.Drawing.Printing.StandardPrintController
+    $doc.add_PrintPage({{
+        param($s, $e)
+        $f = New-Object System.Drawing.Font("Consolas", 8.5, [System.Drawing.FontStyle]::Bold)
+        $w = if ($e.PageBounds.Width -gt 40 -and $e.PageBounds.Width -le 310) {{ $e.PageBounds.Width - 6 }} else {{ 276 }}
+        $e.Graphics.DrawString($txt, $f, [System.Drawing.Brushes]::Black, (New-Object System.Drawing.RectangleF(3, 3, $w, 2500)))
+        $e.HasMorePages = $false
+    }})
+    $doc.Print()
+    $doc.Dispose()
+}}
+"""
         res = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", cmd],
-            capture_output=True, text=True, timeout=12
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
+            capture_output=True, text=True, timeout=15
         )
         if res.returncode == 0:
-            return True, "Impresso com sucesso via Out-Printer"
-        return False, f"Erro Out-Printer: {res.stderr.strip()}"
+            return True, "Impresso com sucesso via Motor GDI+ Margem Zero"
+        return False, f"Erro GDI+: {res.stderr.strip()}"
     finally:
         if temp_file and os.path.exists(temp_file):
             try:
@@ -333,41 +352,54 @@ def build_order_receipt_text(order, cols=40):
     lines.append(thin)
     lines.append(center("ITENS DO PEDIDO"))
     items = order.get("items") or []
+    items_sum = 0.0
 
     for it in items:
         itype = it.get("type")
+        raw_title = str(it.get("kitName") or it.get("name") or "Item").strip()
+        qty = int(it.get("quantity") or 1)
+        disp_title = raw_title if re.match(r"^\d+\s*x\s+", raw_title, re.I) else f"{qty}x {raw_title}"
         if itype == "kit":
-            p = it.get("finalPrice") or it.get("price") or 0
-            lines.append(line(f"1x {it.get('kitName') or 'Kit Salgados'}", format_currency(p)))
+            p = float(it.get("finalPrice") or it.get("price") or 0)
+            items_sum += p
+            lines.append(line(disp_title, format_currency(p)))
             for f in it.get("flavors") or []:
-                lines.append(f"  • {f.get('quantity', 0)}x {f.get('name', '')}")
+                lines.append(f"  > {f.get('quantity', 0)}x {str(f.get('name', '')).upper()}")
             for m in it.get("sauces") or []:
-                lines.append(f"  • Molho: {m.get('quantity', 1)}x {m.get('name', '')}")
+                lines.append(f"  * Molho: {m.get('quantity', 1)}x {m.get('name', '')}")
         elif itype == "combo":
-            p = it.get("finalPrice") or it.get("price") or 0
-            lines.append(line(f"1x {it.get('name') or 'Combo'}", format_currency(p)))
+            p = float(it.get("finalPrice") or it.get("price") or 0)
+            items_sum += p
+            lines.append(line(disp_title, format_currency(p)))
+            for f in it.get("flavors") or []:
+                lines.append(f"  > {f.get('quantity', 0)}x {str(f.get('name', '')).upper()}")
             for ci in it.get("items") or []:
                 lines.append(f"  • {ci.get('quantity', 1)}x {ci.get('name', '')}")
         else:
-            qty = it.get("quantity") or 1
-            name = it.get("name") or "Produto"
-            price = it.get("price") or 0
-            is_drink = any(d in name.lower() for d in ["coca", "guarana", "refrigerante", "suco", "agua", "bebida", "cerveja", "2l"])
+            name = str(it.get("name") or "Produto")
+            price = float(it.get("price") or 0)
+            p_tot = float(it.get("totalPrice") or (price * qty))
+            items_sum += p_tot
+            is_drink = any(d in name.lower() for d in ["coca", "guarana", "refrigerante", "suco", "agua", "bebida", "cerveja", "2l", "285ml", "copo"])
             prefix = "[GELADA] " if is_drink else ""
-            lines.append(line(f"{qty}x {prefix}{name}", format_currency(price * qty)))
+            lines.append(line(f"{qty}x {prefix}{name}", format_currency(p_tot)))
 
     notes = order.get("notes") or cust.get("notes")
     if notes:
-        lines.append(f"OBS: {str(notes)[:cols-5]}")
+        lines.append(f"OBS: {str(notes)}")
 
     # Totais e Pagamento
-    subtotal = order.get("subtotal") or order.get("subtotalAmount") or order.get("total_amount") or 0
-    fee = order.get("delivery_fee") or order.get("deliveryFee") or 0
-    total = order.get("total_amount") or order.get("totalAmount") or subtotal + fee
+    raw_sub = float(order.get("subtotal") or order.get("subtotalAmount") or 0)
+    subtotal = raw_sub if raw_sub > 0 else items_sum
+    fee = float(order.get("delivery_fee") or order.get("deliveryFee") or 0)
+    total = float(order.get("total_amount") or order.get("totalAmount") or (subtotal + fee))
+    disc = max(0.0, round((subtotal + fee) - total, 2))
 
     lines.append(thin)
+    lines.append(line("Subtotal:", format_currency(subtotal)))
+    if disc >= 0.05:
+        lines.append(line("Desconto / Cupom:", f"- {format_currency(disc)}"))
     if fee > 0:
-        lines.append(line("Subtotal:", format_currency(subtotal)))
         lines.append(line("Taxa de Entrega:", format_currency(fee)))
     lines.append(line("TOTAL DO PEDIDO:", format_currency(total)))
 
@@ -591,6 +623,8 @@ class SpoolerApiHandler(BaseHTTPRequestHandler):
             resp = {
                 "online": True,
                 "status": "online",
+                "version": "59.0",
+                "graphicalEngine": False,
                 "defaultPrinter": def_printer,
                 "installedPrinters": printers,
                 "autoPrintActive": monitor.running,

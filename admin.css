@@ -3380,7 +3380,7 @@ tr.table-row-draggable.drag-over-below {
     display: block !important;
     visibility: visible !important;
     position: static !important;
-    margin: 0 auto !important;
+    margin: 0 !important;
     padding: 0 1.5mm !important;
     box-sizing: border-box !important;
     background: #ffffff !important;
@@ -3400,18 +3400,16 @@ tr.table-row-draggable.drag-over-below {
   /* Largura 80mm: 76mm de conteúdo útil */
   .thermal-receipt-area.paper-80mm {
     width: 76mm !important;
-    max-width: 76mm !important;
-    min-width: 76mm !important;
-    margin: 0 auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 0 1.5mm !important;
   }
 
   /* Largura 58mm: 50mm de conteúdo útil */
   .thermal-receipt-area.paper-58mm {
     width: 50mm !important;
-    max-width: 50mm !important;
-    min-width: 50mm !important;
-    margin: 0 auto !important;
+    max-width: 100% !important;
+    margin: 0 !important;
     padding: 0 1mm !important;
     font-size: 9pt !important;
   }
