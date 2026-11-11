@@ -221,6 +221,209 @@
         estimatedCpc: 0.65,
         estimatedConversionRate: 12
       }
+    },
+
+    // 6. PERSONALIZAÇÃO DE LAYOUT & TEMAS COMEMORATIVOS IA (PADRÃO ATUAL PROTEGIDO)
+    themeConfig: {
+      enabled: false, // false = Mantém 100% o Tema Padrão Original da Loja sem alterações
+      autoDetectHoliday: false, // Se true, ativa automaticamente o tema da época/feriado atual
+      activeThemeId: "default", // default | natal | anonovo | pascoa | saojoao | halloween | trabalhador | maes | namorados | clientes | blackfriday | copa
+      showMascotBadge: true, // Selo discreto no cabeçalho com personagem/ícone comemorativo
+      showSeasonalStrip: true, // Faixa fina e elegante de saudação no topo
+      showCornerMascot: true, // Pequeno selo flutuante discreto no canto (desktop)
+      customOverrides: {
+        useCustomColors: false,
+        primaryColor: "#f59e0b",
+        headerBgStart: "#2c1a06",
+        headerBgEnd: "#121214",
+        pageBgColor: "#f1f5f9",
+        customMascotEmoji: "",
+        customGreetingText: ""
+      }
+    }
+  };
+
+  // CATÁLOGO DE TEMAS PRONTOS GERADOS POR IA (CORES, PERSONAGENS DISCRETOS E ÉPOCAS)
+  const AI_SEASONAL_THEMES = {
+    default: {
+      id: "default",
+      name: "Padrão VIP Original (Ouro & Preto)",
+      periodLabel: "Padrão Oficial da Loja",
+      months: [],
+      primaryColor: "#f59e0b",
+      goldDark: "#d97706",
+      goldLight: "#fef3c7",
+      headerBgStart: "#2c1a06",
+      headerBgEnd: "#121214",
+      pageBgColor: "#f1f5f9",
+      mascotEmoji: "🥟👑",
+      mascotTitle: "Salgados VIP • Fritos na Hora",
+      greetingText: ""
+    },
+    natal: {
+      id: "natal",
+      name: "Especial de Natal VIP",
+      periodLabel: "01/Dez a 26/Dez",
+      dateRange: { startMonth: 12, startDay: 1, endMonth: 12, endDay: 26 },
+      primaryColor: "#dc2626",
+      goldDark: "#b91c1c",
+      goldLight: "#fee2e2",
+      headerBgStart: "#7f1d1d",
+      headerBgEnd: "#064e3b",
+      pageBgColor: "#f8fafc",
+      mascotEmoji: "🎅🎄",
+      mascotTitle: "Natal Delicioso Salgados VIP",
+      greetingText: "🎄 Boas Festas! Encomende seus Kits e Centos de Salgados para a Ceia e Confraternizações!"
+    },
+    anonovo: {
+      id: "anonovo",
+      name: "Réveillon & Ano Novo Dourado",
+      periodLabel: "27/Dez a 05/Jan",
+      dateRange: { startMonth: 12, startDay: 27, endMonth: 1, endDay: 5 },
+      primaryColor: "#eab308",
+      goldDark: "#ca8a04",
+      goldLight: "#fef9c3",
+      headerBgStart: "#1e293b",
+      headerBgEnd: "#0f172a",
+      pageBgColor: "#f8fafc",
+      mascotEmoji: "🥂✨",
+      mascotTitle: "Feliz Ano Novo • Celebre com Salgados VIP",
+      greetingText: "✨ Feliz Ano Novo! Reúna a família e amigos com salgadinhos quentinhos fritos na hora!"
+    },
+    pascoa: {
+      id: "pascoa",
+      name: "Feliz Páscoa em Família",
+      periodLabel: "Março / Abril (Páscoa)",
+      dateRange: { startMonth: 3, startDay: 22, endMonth: 4, endDay: 21 },
+      primaryColor: "#9333ea",
+      goldDark: "#7e22ce",
+      goldLight: "#f3e8ff",
+      headerBgStart: "#3b0764",
+      headerBgEnd: "#1e1b4b",
+      pageBgColor: "#faf5ff",
+      mascotEmoji: "🐰🍫",
+      mascotTitle: "Domingo em Família • Especial de Páscoa",
+      greetingText: "🐰 Feliz Páscoa! Antes do chocolate, peça aquele Kit de Salgadinhos Crocantes para a família!"
+    },
+    trabalhador: {
+      id: "trabalhador",
+      name: "Dia do Trabalhador (1º de Maio)",
+      periodLabel: "28/Abr a 03/Mai",
+      dateRange: { startMonth: 4, startDay: 28, endMonth: 5, endDay: 3 },
+      primaryColor: "#0284c7",
+      goldDark: "#0369a1",
+      goldLight: "#e0f2fe",
+      headerBgStart: "#0c4a6e",
+      headerBgEnd: "#0f172a",
+      pageBgColor: "#f0f9ff",
+      mascotEmoji: "👷‍♂️🥟",
+      mascotTitle: "Homenagem ao Trabalhador • Você merece descansar!",
+      greetingText: "💪 Feliz Dia do Trabalhador! Hoje a cozinha é por nossa conta: peça seu Combo e descanse!"
+    },
+    maes: {
+      id: "maes",
+      name: "Especial Dia das Mães",
+      periodLabel: "04/Mai a 14/Mai",
+      dateRange: { startMonth: 5, startDay: 4, endMonth: 5, endDay: 14 },
+      primaryColor: "#e11d48",
+      goldDark: "#be123c",
+      goldLight: "#ffe4e6",
+      headerBgStart: "#881337",
+      headerBgEnd: "#1f1218",
+      pageBgColor: "#fff1f2",
+      mascotEmoji: "💐❤️",
+      mascotTitle: "Carinho de Mãe • Hoje ela não cozinha!",
+      greetingText: "💐 Especial Dia das Mães: surpreenda quem você ama com um Kit Completo sem louça na cozinha!"
+    },
+    namorados: {
+      id: "namorados",
+      name: "Dia dos Namorados (Combo Casal)",
+      periodLabel: "08/Jun a 13/Jun",
+      dateRange: { startMonth: 6, startDay: 8, endMonth: 6, endDay: 13 },
+      primaryColor: "#db2777",
+      goldDark: "#be185d",
+      goldLight: "#fce7f3",
+      headerBgStart: "#831843",
+      headerBgEnd: "#18181b",
+      pageBgColor: "#fdf2f8",
+      mascotEmoji: "💑❤️",
+      mascotTitle: "Amor de Verdade tem Coxinha Quentinha!",
+      greetingText: "❤️ Especial Dia dos Namorados: peça o Combo Casal VIP com refrigerante gelado e molho especial!"
+    },
+    saojoao: {
+      id: "saojoao",
+      name: "Arraiá & Festas Juninas/Julinas",
+      periodLabel: "14/Jun a 25/Jul",
+      dateRange: { startMonth: 6, startDay: 14, endMonth: 7, endDay: 25 },
+      primaryColor: "#ea580c",
+      goldDark: "#c2410c",
+      goldLight: "#ffedd5",
+      headerBgStart: "#7c2d12",
+      headerBgEnd: "#422006",
+      pageBgColor: "#fffbeb",
+      mascotEmoji: "🪗🌽",
+      mascotTitle: "Arraiá do Salgados VIP • Bão Demais!",
+      greetingText: "🎏 Arraiá Salgados VIP! Kits quentinhos perfeitos para sua festa junina e reunião com amigos!"
+    },
+    pais: {
+      id: "pais",
+      name: "Especial Dia dos Pais",
+      periodLabel: "05/Ago a 14/Ago",
+      dateRange: { startMonth: 8, startDay: 5, endMonth: 8, endDay: 14 },
+      primaryColor: "#2563eb",
+      goldDark: "#1d4ed8",
+      goldLight: "#dbeafe",
+      headerBgStart: "#1e3a8a",
+      headerBgEnd: "#0f172a",
+      pageBgColor: "#f8fafc",
+      mascotEmoji: "👔🏆",
+      mascotTitle: "Dia dos Pais VIP • Comemore em Família",
+      greetingText: "🏆 Especial Dia dos Pais: reúna toda a família com nossos Super Combos e Kits de Festa!"
+    },
+    clientes: {
+      id: "clientes",
+      name: "Semana do Cliente VIP",
+      periodLabel: "10/Set a 20/Set",
+      dateRange: { startMonth: 9, startDay: 10, endMonth: 9, endDay: 20 },
+      primaryColor: "#059669",
+      goldDark: "#047857",
+      goldLight: "#d1fae5",
+      headerBgStart: "#064e3b",
+      headerBgEnd: "#0f172a",
+      pageBgColor: "#f0fdf4",
+      mascotEmoji: "🤝⭐",
+      mascotTitle: "Semana do Cliente • Obrigado por escolher o VIP!",
+      greetingText: "⭐ Semana do Cliente VIP! Aproveite descontos e cupons exclusivos feitos para você!"
+    },
+    halloween: {
+      id: "halloween",
+      name: "Dia das Bruxas (Halloween VIP)",
+      periodLabel: "20/Out a 01/Nov",
+      dateRange: { startMonth: 10, startDay: 20, endMonth: 11, endDay: 1 },
+      primaryColor: "#f97316",
+      goldDark: "#ea580c",
+      goldLight: "#ffedd5",
+      headerBgStart: "#3b0764",
+      headerBgEnd: "#09090b",
+      pageBgColor: "#faf5ff",
+      mascotEmoji: "🎃👻",
+      mascotTitle: "Gostosuras Crocantes ou Travessuras!",
+      greetingText: "🎃 Especial Dia das Bruxas: sem travessuras, só gostosuras fritas na hora! Peça seu Kit!"
+    },
+    blackfriday: {
+      id: "blackfriday",
+      name: "Black Friday Salgados VIP",
+      periodLabel: "15/Nov a 30/Nov",
+      dateRange: { startMonth: 11, startDay: 15, endMonth: 11, endDay: 30 },
+      primaryColor: "#eab308",
+      goldDark: "#ca8a04",
+      goldLight: "#fef08a",
+      headerBgStart: "#09090b",
+      headerBgEnd: "#18181b",
+      pageBgColor: "#f4f4f5",
+      mascotEmoji: "🖤🔥",
+      mascotTitle: "Black Friday VIP • Descontos Reais",
+      greetingText: "🔥 BLACK FRIDAY SALGADOS VIP: Combos e Kits com super descontos e cupons especiais hoje!"
     }
   };
 
@@ -778,9 +981,155 @@
   }
 
   // ============================================================================
+  // MOTOR DE TEMAS COMEMORATIVOS & PERSONALIZAÇÃO VISUAL (MANTÉM O PADRÃO INTACTO)
+  // ============================================================================
+  function detectSuggestedHolidayThemeId() {
+    const now = new Date();
+    const m = now.getMonth() + 1;
+    const d = now.getDate();
+
+    for (const key of Object.keys(AI_SEASONAL_THEMES)) {
+      if (key === "default") continue;
+      const t = AI_SEASONAL_THEMES[key];
+      const r = t.dateRange;
+      if (!r) continue;
+      if (r.startMonth === r.endMonth) {
+        if (m === r.startMonth && d >= r.startDay && d <= r.endDay) return key;
+      } else if (r.startMonth > r.endMonth) {
+        // Virada de ano (ex: Dezembro a Janeiro)
+        if ((m === r.startMonth && d >= r.startDay) || (m === r.endMonth && d <= r.endDay)) return key;
+      } else {
+        if ((m === r.startMonth && d >= r.startDay) || (m === r.endMonth && d <= r.endDay) || (m > r.startMonth && m < r.endMonth)) {
+          return key;
+        }
+      }
+    }
+    return "default";
+  }
+
+  function resolveEffectiveTheme() {
+    const data = loadMarketingData();
+    const tc = data.themeConfig || {};
+    if (!tc.enabled) {
+      return { isDefault: true, theme: AI_SEASONAL_THEMES.default, config: tc };
+    }
+
+    let chosenId = tc.activeThemeId || "default";
+    if (tc.autoDetectHoliday) {
+      const detected = detectSuggestedHolidayThemeId();
+      if (detected !== "default") {
+        chosenId = detected;
+      }
+    }
+
+    const baseTheme = AI_SEASONAL_THEMES[chosenId] || AI_SEASONAL_THEMES.default;
+    const effective = { ...baseTheme };
+
+    if (tc.customOverrides?.useCustomColors) {
+      if (tc.customOverrides.primaryColor) effective.primaryColor = tc.customOverrides.primaryColor;
+      if (tc.customOverrides.headerBgStart) effective.headerBgStart = tc.customOverrides.headerBgStart;
+      if (tc.customOverrides.headerBgEnd) effective.headerBgEnd = tc.customOverrides.headerBgEnd;
+      if (tc.customOverrides.pageBgColor) effective.pageBgColor = tc.customOverrides.pageBgColor;
+    }
+    if (tc.customOverrides?.customMascotEmoji && tc.customOverrides.customMascotEmoji.trim()) {
+      effective.mascotEmoji = tc.customOverrides.customMascotEmoji.trim();
+    }
+    if (tc.customOverrides?.customGreetingText && tc.customOverrides.customGreetingText.trim()) {
+      effective.greetingText = tc.customOverrides.customGreetingText.trim();
+    }
+
+    return {
+      isDefault: chosenId === "default" && !tc.customOverrides?.useCustomColors,
+      theme: effective,
+      config: tc
+    };
+  }
+
+  function applyCustomerSeasonalTheme() {
+    const existingStyle = document.getElementById("vip-seasonal-theme-vars");
+    const existingStrip = document.getElementById("vip-seasonal-top-strip");
+    const existingMascotBadge = document.getElementById("vip-header-mascot-badge");
+    const existingCorner = document.getElementById("vip-floating-corner-mascot");
+
+    if (existingStyle) existingStyle.remove();
+    if (existingStrip) existingStrip.remove();
+    if (existingMascotBadge) existingMascotBadge.remove();
+    if (existingCorner) existingCorner.remove();
+
+    const { isDefault, theme, config } = resolveEffectiveTheme();
+    if (!config.enabled || isDefault) {
+      return; // Mantém 100% o layout original padrão sem tocar em nada!
+    }
+
+    // 1. Injetar variáveis CSS suaves (Cores do Tema)
+    const styleEl = document.createElement("style");
+    styleEl.id = "vip-seasonal-theme-vars";
+    styleEl.textContent = `
+      :root {
+        --primary-gold: ${theme.primaryColor} !important;
+        --gold-dark: ${theme.goldDark || theme.primaryColor} !important;
+        --gold-light: ${theme.goldLight || "#fef3c7"} !important;
+      }
+      body {
+        background-color: ${theme.pageBgColor || "#f1f5f9"} !important;
+      }
+      .vip-header {
+        background: radial-gradient(circle at top right, ${theme.headerBgStart} 0%, ${theme.headerBgEnd} 100%) !important;
+        border-bottom-color: ${theme.primaryColor}55 !important;
+      }
+      .store-logo-wrapper {
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4), 0 0 0 3.5px ${theme.primaryColor}88 !important;
+      }
+    `;
+    document.head.appendChild(styleEl);
+
+    // 2. Faixa fina comemorativa no topo (se ativada e houver saudação)
+    if (config.showSeasonalStrip && theme.greetingText) {
+      const strip = document.createElement("div");
+      strip.id = "vip-seasonal-top-strip";
+      strip.className = "vip-seasonal-greeting-strip";
+      strip.style.background = `linear-gradient(90deg, ${theme.headerBgEnd}, ${theme.primaryColor}, ${theme.headerBgStart})`;
+      strip.style.color = "#ffffff";
+      strip.innerHTML = `<span>${esc(theme.greetingText)}</span>`;
+      const headerEl = document.querySelector(".vip-header");
+      if (headerEl && headerEl.parentNode) {
+        headerEl.parentNode.insertBefore(strip, headerEl);
+      }
+    }
+
+    // 3. Personagem / Selo Decorativo Discreto no Cabeçalho
+    if (config.showMascotBadge && theme.mascotEmoji) {
+      const headerContainer = document.querySelector(".vip-header .header-container");
+      if (headerContainer) {
+        const badge = document.createElement("div");
+        badge.id = "vip-header-mascot-badge";
+        badge.className = "vip-header-mascot-badge";
+        badge.innerHTML = `
+          <span class="vip-header-mascot-emoji">${esc(theme.mascotEmoji)}</span>
+          <span>${esc(theme.mascotTitle || theme.name)}</span>
+        `;
+        headerContainer.appendChild(badge);
+      }
+    }
+
+    // 4. Selo Flutuante Discreto no Canto Inferior Esquerdo (Apenas Desktop, sem poluir)
+    if (config.showCornerMascot && theme.mascotEmoji) {
+      const corner = document.createElement("div");
+      corner.id = "vip-floating-corner-mascot";
+      corner.className = "vip-floating-corner-mascot";
+      corner.innerHTML = `
+        <span style="font-size:1.25rem;">${esc(theme.mascotEmoji)}</span>
+        <span>${esc(theme.name)}</span>
+      `;
+      document.body.appendChild(corner);
+    }
+  }
+
+  // ============================================================================
   // RENDERIZAÇÃO NO MODO CLIENTE (index.html)
   // ============================================================================
   function initCustomerMarketingUI() {
+    applyCustomerSeasonalTheme();
     renderHappyHourTopBanner();
     renderFavoriteOneClickCard();
     renderCustomerPopupIfEligible();
@@ -2348,6 +2697,246 @@
   }
 
   // ============================================================================
+  // PAINEL ADMINISTRATIVO: ABA TEMAS & LAYOUT IA (#tab-themes)
+  // ============================================================================
+  function renderAdminThemesTab() {
+    const container = document.getElementById("tab-themes");
+    if (!container) return;
+
+    const data = loadMarketingData();
+    const tc = data.themeConfig || DEFAULT_MARKETING_DATA.themeConfig;
+    const suggestedHolidayId = detectSuggestedHolidayThemeId();
+    const suggestedTheme = AI_SEASONAL_THEMES[suggestedHolidayId] || AI_SEASONAL_THEMES.default;
+    const effective = resolveEffectiveTheme();
+
+    const cardsHtml = Object.values(AI_SEASONAL_THEMES).map(t => {
+      const isSelected = (tc.activeThemeId || "default") === t.id;
+      const isAutoMatch = suggestedHolidayId === t.id && t.id !== "default";
+      return `
+        <div class="vip-theme-card ${isSelected ? 'is-selected' : ''}">
+          <div>
+            <div class="vip-theme-preview-banner" style="background: linear-gradient(135deg, ${t.headerBgStart} 0%, ${t.headerBgEnd} 100%); border-bottom: 3px solid ${t.primaryColor};">
+              <div>
+                <div style="font-size:0.7rem;font-weight:800;text-transform:uppercase;color:${t.goldLight};letter-spacing:0.04em;">${esc(t.periodLabel)}</div>
+                <div style="font-size:1rem;font-weight:900;color:#fff;margin-top:2px;">${esc(t.name)}</div>
+                <div class="vip-theme-swatches" style="margin-top:8px;">
+                  <span class="vip-theme-swatch-dot" style="background:${t.primaryColor};" title="Cor de Destaque"></span>
+                  <span class="vip-theme-swatch-dot" style="background:${t.headerBgStart};" title="Topo Início"></span>
+                  <span class="vip-theme-swatch-dot" style="background:${t.headerBgEnd};" title="Topo Fim"></span>
+                  <span class="vip-theme-swatch-dot" style="background:${t.pageBgColor};" title="Fundo Suave"></span>
+                </div>
+              </div>
+              <div class="vip-theme-preview-mascot">${esc(t.mascotEmoji)}</div>
+            </div>
+            <div class="vip-theme-card-body">
+              <div>
+                ${isAutoMatch ? `<span class="vip-theme-period-tag" style="background:#dcfce7;color:#15803d;">✨ Época Atual Detectada pela IA</span>` : `<span class="vip-theme-period-tag">${esc(t.periodLabel)}</span>`}
+                <p style="font-size:0.8rem;color:#475569;margin:4px 0 0 0;">
+                  ${t.id === 'default'
+                    ? 'Mantém 100% as cores originais (Dourado & Preto) e o layout padrão oficial do Salgados VIP.'
+                    : `Selo discreto: <strong>${esc(t.mascotEmoji)} ${esc(t.mascotTitle)}</strong>`}
+                </p>
+              </div>
+              <button type="button" class="${isSelected ? 'btn-primary' : 'btn-secondary'} btn-sm" style="width:100%;margin-top:10px;justify-content:center;" onclick="window.VIPMarketing.selectSeasonalTheme('${esc(t.id)}')">
+                <i class="fa-solid ${isSelected ? 'fa-circle-check' : 'fa-wand-magic-sparkles'}"></i>
+                ${isSelected ? (tc.enabled ? 'Tema Ativo no Site' : 'Selecionado (Ative a Chave Acima)') : (t.id === 'default' ? 'Usar Tema Padrão Original' : 'Aplicar Este Tema IA')}
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    container.innerHTML = `
+      <div class="vip-mkt-header-banner">
+        <div class="vip-mkt-header-title">
+          <div class="vip-mkt-header-icon"><i class="fa-solid fa-palette"></i></div>
+          <div>
+            <h2>Personalização de Layout & Temas Comemorativos por IA</h2>
+            <p>Temas prontos para feriados e épocas do ano (Natal, Páscoa, Dia das Bruxas, Ano Novo, Dia do Trabalhador e mais) com decoração limpa que não polui o cardápio.</p>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+          <button type="button" class="btn-secondary btn-sm" style="background:#ffffff;color:#0f172a;font-weight:800;border:none;padding:0.6rem 1rem;border-radius:10px;cursor:pointer;" onclick="window.VIPMarketing.restoreDefaultOriginalTheme()">
+            <i class="fa-solid fa-rotate-left" style="color:#ea580c;"></i> Voltar ao Tema Padrão Original
+          </button>
+          <div class="vip-mkt-master-toggle-box">
+            <span>${tc.enabled ? '🟢 Tema Personalizado ATIVO' : '⚪ Usando Tema Padrão Original'}</span>
+            <label class="vip-switch" title="Desative a qualquer momento para voltar instantaneamente ao tema padrão atual">
+              <input type="checkbox" ${tc.enabled ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeSystemEnabled(this.checked)">
+              <span class="vip-switch-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- STATUS ATUAL E PILOTO AUTOMÁTICO DE FERIADOS -->
+      <div class="adm-card" style="margin-bottom: 1.5rem;">
+        <div class="adm-card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <h3><i class="fa-solid fa-calendar-wand-sparkles" style="color:#ea580c;"></i> Piloto Automático de Feriados & Datas Comemorativas (IA)</h3>
+            <p style="margin:2px 0 0 0;font-size:0.82rem;color:#64748b;">
+              Quando ativado, o sistema identifica automaticamente a época do ano (Natal, Ano Novo, Páscoa, São João, Halloween, etc.) e aplica o tema sem você precisar configurar nada. Fora de época, mantém o Tema Padrão Original!
+            </p>
+          </div>
+          <label class="vip-switch">
+            <input type="checkbox" ${tc.autoDetectHoliday ? "checked" : ""} onchange="window.VIPMarketing.toggleAutoDetectHoliday(this.checked)">
+            <span class="vip-switch-slider"></span>
+          </label>
+        </div>
+        <div class="adm-card-body">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;background:#f8fafc;padding:0.9rem 1.15rem;border-radius:12px;border:1px solid #e2e8f0;">
+            <div>
+              <span style="font-size:0.75rem;font-weight:800;text-transform:uppercase;color:#64748b;">Visual Ativo Agora no Cardápio do Cliente:</span>
+              <div style="font-size:1.05rem;font-weight:900;color:#0f172a;margin-top:2px;">
+                ${!tc.enabled || effective.isDefault
+                  ? '🥟👑 Tema Padrão Original da Loja (Ouro & Preto — 100% Original)'
+                  : `${esc(effective.theme.mascotEmoji)} ${esc(effective.theme.name)}`}
+              </div>
+              <small style="color:#475569;">
+                Sugestão da IA para a data de hoje: <strong>${esc(suggestedTheme.mascotEmoji)} ${esc(suggestedTheme.name)}</strong>
+              </small>
+            </div>
+            <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;">
+              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showMascotBadge !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showMascotBadge', this.checked)">
+                Selo/Personagem no Topo
+              </label>
+              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showSeasonalStrip !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showSeasonalStrip', this.checked)">
+                Faixa de Saudação Fina
+              </label>
+              <label style="font-size:0.82rem;font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" ${tc.showCornerMascot !== false ? "checked" : ""} onchange="window.VIPMarketing.toggleThemeOption('showCornerMascot', this.checked)">
+                Mascote Discreto no Canto
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CATÁLOGO DE TEMAS PRONTOS PELA IA (1 CLIQUE) -->
+      <h3 style="margin: 0.5rem 0; font-size: 1.05rem; color: #0f172a;">
+        <i class="fa-solid fa-wand-magic-sparkles" style="color:#f59e0b;"></i> Temas Prontos por IA — Escolha em 1 Clique (Simples e Sem Poluir o Cardápio)
+      </h3>
+      <div class="vip-themes-grid" style="margin-bottom: 1.75rem;">
+        ${cardsHtml}
+      </div>
+
+      <!-- PERSONALIZAÇÃO FINA DE CORES & MASCOTE (OPCIONAL) -->
+      <div class="adm-card">
+        <div class="adm-card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;">
+          <div>
+            <h3><i class="fa-solid fa-sliders"></i> Ajuste Manual de Cores e Personagem (Opcional)</h3>
+            <p style="margin:2px 0 0 0;font-size:0.82rem;color:#64748b;">Se quiser criar sua própria combinação de cores ou frase comemorativa personalizada.</p>
+          </div>
+          <label style="font-size:0.84rem;font-weight:800;display:flex;align-items:center;gap:8px;cursor:pointer;">
+            <input type="checkbox" id="tc-use-custom" ${tc.customOverrides?.useCustomColors ? "checked" : ""} onchange="window.VIPMarketing.saveCustomThemeOverrides()">
+            Usar cores manuais abaixo
+          </label>
+        </div>
+        <div class="adm-card-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;">
+            <div class="adm-form-group">
+              <label>Cor Principal de Destaque</label>
+              <input type="color" id="tc-primary" value="${esc(tc.customOverrides?.primaryColor || '#f59e0b')}" style="width:100%;height:42px;border-radius:8px;border:1px solid #cbd5e1;cursor:pointer;">
+            </div>
+            <div class="adm-form-group">
+              <label>Fundo do Topo (Cor Inicial)</label>
+              <input type="color" id="tc-bg-start" value="${esc(tc.customOverrides?.headerBgStart || '#2c1a06')}" style="width:100%;height:42px;border-radius:8px;border:1px solid #cbd5e1;cursor:pointer;">
+            </div>
+            <div class="adm-form-group">
+              <label>Fundo do Topo (Cor Final)</label>
+              <input type="color" id="tc-bg-end" value="${esc(tc.customOverrides?.headerBgEnd || '#121214')}" style="width:100%;height:42px;border-radius:8px;border:1px solid #cbd5e1;cursor:pointer;">
+            </div>
+            <div class="adm-form-group">
+              <label>Emoji / Personagem Decorativo</label>
+              <input type="text" id="tc-mascot" placeholder="Ex: 🎅🎄 ou 🥟👑" value="${esc(tc.customOverrides?.customMascotEmoji || '')}">
+            </div>
+            <div class="adm-form-group" style="grid-column: 1 / -1;">
+              <label>Frase Comemorativa Discreta no Topo (Deixe em branco para usar a frase automática do tema)</label>
+              <input type="text" id="tc-greeting" placeholder="Ex: 🎄 Feliz Natal! Faça sua encomenda de Kits para a família!" value="${esc(tc.customOverrides?.customGreetingText || '')}">
+            </div>
+          </div>
+          <div style="margin-top:1rem;display:flex;justify-content:flex-end;gap:0.75rem;">
+            <button type="button" class="btn-secondary" onclick="window.VIPMarketing.restoreDefaultOriginalTheme()">
+              <i class="fa-solid fa-rotate-left"></i> Restaurar Padrão Original
+            </button>
+            <button type="button" class="btn-primary" onclick="window.VIPMarketing.saveCustomThemeOverrides()">
+              <i class="fa-solid fa-floppy-disk"></i> Salvar Personalização
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function toggleThemeSystemEnabled(checked) {
+    const data = loadMarketingData();
+    if (!data.themeConfig) data.themeConfig = JSON.parse(JSON.stringify(DEFAULT_MARKETING_DATA.themeConfig));
+    data.themeConfig.enabled = !!checked;
+    saveMarketingData(data);
+    renderAdminThemesTab();
+  }
+
+  function toggleAutoDetectHoliday(checked) {
+    const data = loadMarketingData();
+    if (!data.themeConfig) data.themeConfig = JSON.parse(JSON.stringify(DEFAULT_MARKETING_DATA.themeConfig));
+    data.themeConfig.autoDetectHoliday = !!checked;
+    if (checked) data.themeConfig.enabled = true;
+    saveMarketingData(data);
+    renderAdminThemesTab();
+  }
+
+  function selectSeasonalTheme(themeId) {
+    const data = loadMarketingData();
+    if (!data.themeConfig) data.themeConfig = JSON.parse(JSON.stringify(DEFAULT_MARKETING_DATA.themeConfig));
+    data.themeConfig.activeThemeId = themeId;
+    data.themeConfig.autoDetectHoliday = false;
+    if (themeId === "default") {
+      data.themeConfig.enabled = false;
+      data.themeConfig.customOverrides.useCustomColors = false;
+      saveMarketingData(data, true);
+      notifyToast("✓ Tema Padrão Original da loja restaurado com sucesso!");
+    } else {
+      data.themeConfig.enabled = true;
+      data.themeConfig.customOverrides.useCustomColors = false;
+      saveMarketingData(data, true);
+      const tName = AI_SEASONAL_THEMES[themeId]?.name || themeId;
+      notifyToast(`🎨 Tema "${tName}" ativado no cardápio!`);
+    }
+    renderAdminThemesTab();
+  }
+
+  function restoreDefaultOriginalTheme() {
+    selectSeasonalTheme("default");
+  }
+
+  function toggleThemeOption(key, checked) {
+    const data = loadMarketingData();
+    if (!data.themeConfig) data.themeConfig = JSON.parse(JSON.stringify(DEFAULT_MARKETING_DATA.themeConfig));
+    data.themeConfig[key] = !!checked;
+    saveMarketingData(data);
+    renderAdminThemesTab();
+  }
+
+  function saveCustomThemeOverrides() {
+    const data = loadMarketingData();
+    if (!data.themeConfig) data.themeConfig = JSON.parse(JSON.stringify(DEFAULT_MARKETING_DATA.themeConfig));
+    data.themeConfig.customOverrides = {
+      useCustomColors: !!document.getElementById("tc-use-custom")?.checked,
+      primaryColor: document.getElementById("tc-primary")?.value || "#f59e0b",
+      headerBgStart: document.getElementById("tc-bg-start")?.value || "#2c1a06",
+      headerBgEnd: document.getElementById("tc-bg-end")?.value || "#121214",
+      pageBgColor: "#f1f5f9",
+      customMascotEmoji: (document.getElementById("tc-mascot")?.value || "").trim(),
+      customGreetingText: (document.getElementById("tc-greeting")?.value || "").trim()
+    };
+    saveMarketingData(data);
+    renderAdminThemesTab();
+  }
+
+  // ============================================================================
   // INICIALIZAÇÃO AUTOMÁTICA (DETECTA SE ESTÁ NO ADMIN OU NO CLIENTE)
   // ============================================================================
   function bootstrap() {
@@ -2355,6 +2944,7 @@
     if (isAdminPage) {
       renderAdminCouponsTab();
       renderAdminMarketingTab();
+      renderAdminThemesTab();
       window.addEventListener("vip_orders_updated", () => {
         renderAdminCouponsTab();
         renderAdminMarketingTab();
@@ -2362,6 +2952,7 @@
       window.addEventListener("vip_supabase_synced", () => {
         renderAdminCouponsTab();
         renderAdminMarketingTab();
+        renderAdminThemesTab();
       });
     } else {
       initCustomerMarketingUI();
@@ -2417,6 +3008,13 @@
     downloadCreativeImage,
     saveSwotMatrix,
     toggleOmnichannel,
-    saveRoiInputs
+    saveRoiInputs,
+    renderAdminThemesTab,
+    toggleThemeSystemEnabled,
+    toggleAutoDetectHoliday,
+    selectSeasonalTheme,
+    restoreDefaultOriginalTheme,
+    toggleThemeOption,
+    saveCustomThemeOverrides
   };
 })();

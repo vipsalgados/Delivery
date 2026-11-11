@@ -959,3 +959,153 @@
   font-weight: 600;
   cursor: pointer;
 }
+
+/* ------------------------------------------------------------------------------
+   3. PERSONALIZAÇÃO DE LAYOUT & TEMAS COMEMORATIVOS POR IA (#tab-themes + Site)
+   ------------------------------------------------------------------------------ */
+.vip-themes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(275px, 1fr));
+  gap: 1.15rem;
+  margin-top: 1rem;
+}
+
+.vip-theme-card {
+  background: #ffffff;
+  border: 2px solid #e2e8f0;
+  border-radius: 16px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
+}
+
+.vip-theme-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.1);
+}
+
+.vip-theme-card.is-selected {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.25), 0 10px 25px rgba(245, 158, 11, 0.15);
+}
+
+.vip-theme-preview-banner {
+  height: 92px;
+  padding: 0.85rem 1rem;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+}
+
+.vip-theme-preview-mascot {
+  font-size: 2.3rem;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.vip-theme-swatches {
+  display: flex;
+  gap: 6px;
+}
+
+.vip-theme-swatch-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);
+}
+
+.vip-theme-card-body {
+  padding: 1rem 1.15rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.vip-theme-period-tag {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  margin-bottom: 4px;
+}
+
+/* Elementos Decorativos Sutis no Cardápio do Cliente (Sem poluir!) */
+.vip-seasonal-greeting-strip {
+  font-size: 0.82rem;
+  font-weight: 700;
+  padding: 6px 14px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  letter-spacing: 0.02em;
+}
+
+.vip-header-mascot-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 5px 14px;
+  border-radius: 999px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: #ffffff;
+  margin-top: 8px;
+  backdrop-filter: blur(6px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.vip-header-mascot-emoji {
+  font-size: 1.25rem;
+  line-height: 1;
+  display: inline-block;
+  animation: vipMascotFloat 3s ease-in-out infinite;
+}
+
+@keyframes vipMascotFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+.vip-floating-corner-mascot {
+  position: fixed;
+  bottom: 84px;
+  left: 16px;
+  z-index: 65;
+  background: #ffffff;
+  border: 2px solid var(--primary-gold, #f59e0b);
+  border-radius: 999px;
+  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: #0f172a;
+  pointer-events: none;
+  opacity: 0.94;
+}
+
+@media (max-width: 640px) {
+  .vip-floating-corner-mascot {
+    display: none;
+  }
+}
+
