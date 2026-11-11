@@ -46,6 +46,22 @@ let activeCustomizingKit = null; // Kit sendo montado atualmente
 let activeCustomizingCombo = null; // Combo sendo montado atualmente
 let currentFlavorSelections = {}; // { flavorId: quantity } no modal
 let currentSauceSelections = {}; // { sauceId: quantity } sugestão de molhos no modal
+let currentKitRepeatMultiplier = 1; // Multiplicador (1x a 5x) na montagem do kit
+
+function syncCustomizerRepeatPillsUI() {
+  document.querySelectorAll("#customizer-repeat-pills .repeat-pill").forEach(btn => {
+    const m = parseInt(btn.getAttribute("data-mult"), 10) || 1;
+    if (m === currentKitRepeatMultiplier) btn.classList.add("active");
+    else btn.classList.remove("active");
+  });
+}
+
+window.setCustomizerRepeatMultiplier = function(mult) {
+  const validMult = Math.max(1, Math.min(5, parseInt(mult, 10) || 1));
+  currentKitRepeatMultiplier = validMult;
+  syncCustomizerRepeatPillsUI();
+  updateCustomizerProgress();
+};
 
 // FORMATADOR DE MOEDA BRL
 function formatBRL(val) {
@@ -603,6 +619,8 @@ window.orderCombo = function(comboId) {
 
     currentFlavorSelections = {};
     currentSauceSelections = {};
+    currentKitRepeatMultiplier = 1;
+    syncCustomizerRepeatPillsUI();
 
     const regularVal = combo.regularPrice || combo.price;
     const savings = Math.max(0, regularVal - combo.price);
@@ -619,22 +637,35 @@ window.orderCombo = function(comboId) {
   } else {
     const regularVal = combo.regularPrice || combo.price;
     const savings = Math.max(0, regularVal - combo.price);
+    const clonedItems = JSON.parse(JSON.stringify(combo.items || []));
 
     cartItems.push({
       cartItemId: Date.now().toString(),
       type: "combo",
       comboId: combo.id,
       name: combo.name,
+      unitName: combo.name,
       badge: combo.badge,
+      repeatCount: 1,
       comboPrice: combo.price,
+      unitComboPrice: combo.price,
       regularPrice: regularVal,
+      unitRegularPrice: regularVal,
       savings: savings,
+      unitSavings: savings,
       discountPercent: combo.discountPercent || Math.round((savings / regularVal) * 100),
-      items: combo.items,
+      items: clonedItems,
+      unitItems: JSON.parse(JSON.stringify(clonedItems)),
       flavors: [],
+      unitFlavors: [],
+      sauces: [],
+      unitSauces: [],
       flavorExtraCost: 0,
+      unitFlavorExtraCost: 0,
       saucesCost: 0,
-      finalPrice: combo.price
+      unitSaucesCost: 0,
+      finalPrice: combo.price,
+      unitFinalPrice: combo.price
     });
 
     updateCartGlobalUI();
@@ -828,6 +859,8 @@ window.openKitCustomizer = function(kitId) {
   activeCustomizingKit = kit;
   currentFlavorSelections = {};
   currentSauceSelections = {};
+  currentKitRepeatMultiplier = 1;
+  syncCustomizerRepeatPillsUI();
 
   // Reseta busca e filtros do modal
   flavorSearchTerm = "";
@@ -860,6 +893,8 @@ function closeKitCustomizer() {
   activeCustomizingCombo = null;
   currentFlavorSelections = {};
   currentSauceSelections = {};
+  currentKitRepeatMultiplier = 1;
+  syncCustomizerRepeatPillsUI();
   flavorSearchTerm = "";
   flavorCategoryFilter = "all";
 }
@@ -1169,10 +1204,23 @@ function updateCustomizerProgress() {
   progressFill.style.width = `${pct}%`;
 
   const { flavorExtraCost, saucesCost, selectedSaucesList, totalExtras } = calculateKitExtras();
-  const kitTotal = activeCustomizingKit.price + totalExtras;
+  const mult = Math.max(1, Math.min(5, currentKitRepeatMultiplier || 1));
+  const unitKitTotal = activeCustomizingKit.price + totalExtras;
+  const kitTotal = unitKitTotal * mult;
+
+  const totalLabelEl = document.getElementById("customizer-total-label");
+  if (totalLabelEl) {
+    if (mult > 1) {
+      totalLabelEl.textContent = `Total (${mult}x = ${targetQty * mult} salgadinhos):`;
+    } else {
+      totalLabelEl.textContent = "Total deste Kit:";
+    }
+  }
 
   if (remaining === 0) {
-    remainingBadge.textContent = `Kit Completo (${targetQty} de ${targetQty})`;
+    remainingBadge.textContent = mult > 1
+      ? `Kit Completo (${mult}x de ${targetQty} = ${targetQty * mult} un)`
+      : `Kit Completo (${targetQty} de ${targetQty})`;
     remainingBadge.className = "progress-remaining-badge completed";
     progressFill.classList.add("full");
 
@@ -1180,10 +1228,11 @@ function updateCustomizerProgress() {
     btnConfirm.disabled = false;
     btnConfirm.classList.remove("disabled");
 
+    const multPrefix = mult > 1 ? `${mult}x ` : "";
     if (selectedSaucesList.length > 0) {
-      btnConfirmText.textContent = `Confirmar Kit com Molhos (${formatBRL(kitTotal)})`;
+      btnConfirmText.textContent = `Confirmar ${multPrefix}Kit com Molhos (${formatBRL(kitTotal)})`;
     } else {
-      btnConfirmText.textContent = `Adicionar Kit ao Pedido (${formatBRL(kitTotal)})`;
+      btnConfirmText.textContent = `Adicionar ${multPrefix}Kit ao Pedido (${formatBRL(kitTotal)})`;
     }
   } else {
     remainingBadge.textContent = `Restam: ${remaining}`;
@@ -1204,8 +1253,8 @@ function updateCustomizerProgress() {
   if (totalExtras > 0) {
     extraRow.style.display = "flex";
     let extraDetails = [];
-    if (flavorExtraCost > 0) extraDetails.push(`Sabores: + ${formatBRL(flavorExtraCost)}`);
-    if (saucesCost > 0) extraDetails.push(`Molhos: + ${formatBRL(saucesCost)}`);
+    if (flavorExtraCost > 0) extraDetails.push(`Sabores: + ${formatBRL(flavorExtraCost * mult)}`);
+    if (saucesCost > 0) extraDetails.push(`Molhos: + ${formatBRL(saucesCost * mult)}`);
     extraVal.textContent = extraDetails.join(" | ");
   } else {
     extraRow.style.display = "none";
@@ -1213,6 +1262,141 @@ function updateCustomizerProgress() {
 
   totalVal.textContent = formatBRL(kitTotal);
 }
+
+// Aplica o multiplicador de repetição (1x a 5x) sobre um item do carrinho (Kit, Combo ou Produto)
+function applyCartItemMultiplier(item, mult) {
+  const validMult = Math.max(1, Math.min(5, parseInt(mult, 10) || 1));
+
+  if (item.type === "kit") {
+    const prevMult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
+    if (!item.unitKitName) {
+      item.unitKitName = (item.kitName || "Kit de Salgados").replace(/^\d+x\s+/, "").replace(/\s*\(\d+\s*un\)$/, "");
+      item.unitBasePrice = (item.basePrice !== undefined ? item.basePrice : item.finalPrice) / prevMult;
+      item.unitFlavorExtraCost = (item.flavorExtraCost || 0) / prevMult;
+      item.unitSaucesCost = (item.saucesCost || 0) / prevMult;
+      item.unitFinalPrice = (item.finalPrice || 0) / prevMult;
+      item.unitTotalQuantity = Math.round((item.totalQuantity || 30) / prevMult);
+      item.unitFlavors = (item.flavors || []).map(f => ({
+        ...f,
+        quantity: Math.max(1, Math.round((f.quantity || 1) / prevMult))
+      }));
+      item.unitSauces = (item.sauces || []).map(s => ({
+        ...s,
+        quantity: Math.max(1, Math.round((s.quantity || 1) / prevMult)),
+        subtotal: (s.subtotal || 0) / prevMult
+      }));
+      item.unitExtrasBreakdown = (item.extrasBreakdown || []).map(e => ({
+        ...e,
+        qty: Math.max(1, Math.round((e.qty || 1) / prevMult)),
+        adicionalTotal: (e.adicionalTotal || 0) / prevMult
+      }));
+    }
+
+    item.repeatCount = validMult;
+    item.totalQuantity = item.unitTotalQuantity * validMult;
+    item.kitName = validMult > 1
+      ? `${validMult}x ${item.unitKitName} (${item.totalQuantity} un)`
+      : item.unitKitName;
+    item.basePrice = item.unitBasePrice * validMult;
+    item.flavorExtraCost = item.unitFlavorExtraCost * validMult;
+    item.saucesCost = item.unitSaucesCost * validMult;
+    item.finalPrice = item.unitFinalPrice * validMult;
+    item.flavors = item.unitFlavors.map(f => ({
+      ...f,
+      quantity: f.quantity * validMult
+    }));
+    item.sauces = (item.unitSauces || []).map(s => ({
+      ...s,
+      quantity: s.quantity * validMult,
+      subtotal: s.subtotal * validMult
+    }));
+    item.extrasBreakdown = (item.unitExtrasBreakdown || []).map(e => ({
+      ...e,
+      qty: e.qty * validMult,
+      adicionalTotal: e.adicionalTotal * validMult
+    }));
+  } else if (item.type === "combo") {
+    const prevMult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
+    if (!item.unitName) {
+      item.unitName = (item.name || "Combo").replace(/^\d+x\s+/, "");
+      item.unitComboPrice = (item.comboPrice !== undefined ? item.comboPrice : item.finalPrice) / prevMult;
+      item.unitRegularPrice = (item.regularPrice !== undefined ? item.regularPrice : item.finalPrice) / prevMult;
+      item.unitSavings = (item.savings || 0) / prevMult;
+      item.unitTotalQuantity = Math.round((item.totalQuantity || 0) / prevMult);
+      item.unitFlavorExtraCost = (item.flavorExtraCost || 0) / prevMult;
+      item.unitSaucesCost = (item.saucesCost || 0) / prevMult;
+      item.unitFinalPrice = (item.finalPrice || 0) / prevMult;
+      item.unitItems = (item.items || []).map(ci => ({
+        ...ci,
+        quantity: Math.max(1, Math.round((ci.quantity || 1) / prevMult))
+      }));
+      item.unitFlavors = (item.flavors || []).map(f => ({
+        ...f,
+        quantity: Math.max(1, Math.round((f.quantity || 1) / prevMult))
+      }));
+      item.unitSauces = (item.sauces || []).map(s => ({
+        ...s,
+        quantity: Math.max(1, Math.round((s.quantity || 1) / prevMult)),
+        subtotal: (s.subtotal || 0) / prevMult
+      }));
+      item.unitExtrasBreakdown = (item.extrasBreakdown || []).map(e => ({
+        ...e,
+        qty: Math.max(1, Math.round((e.qty || 1) / prevMult)),
+        adicionalTotal: (e.adicionalTotal || 0) / prevMult
+      }));
+    }
+
+    item.repeatCount = validMult;
+    item.name = validMult > 1 ? `${validMult}x ${item.unitName}` : item.unitName;
+    item.comboPrice = item.unitComboPrice * validMult;
+    item.regularPrice = item.unitRegularPrice * validMult;
+    item.savings = item.unitSavings * validMult;
+    item.totalQuantity = item.unitTotalQuantity * validMult;
+    item.flavorExtraCost = item.unitFlavorExtraCost * validMult;
+    item.saucesCost = item.unitSaucesCost * validMult;
+    item.finalPrice = item.unitFinalPrice * validMult;
+    item.items = (item.unitItems || []).map(ci => ({
+      ...ci,
+      quantity: (ci.quantity || 1) * validMult
+    }));
+    item.flavors = (item.unitFlavors || []).map(f => ({
+      ...f,
+      quantity: f.quantity * validMult
+    }));
+    item.sauces = (item.unitSauces || []).map(s => ({
+      ...s,
+      quantity: s.quantity * validMult,
+      subtotal: s.subtotal * validMult
+    }));
+    item.extrasBreakdown = (item.unitExtrasBreakdown || []).map(e => ({
+      ...e,
+      qty: e.qty * validMult,
+      adicionalTotal: e.adicionalTotal * validMult
+    }));
+  } else if (item.type === "product") {
+    item.quantity = validMult;
+  }
+}
+
+window.setCartItemRepeatMultiplier = function(cartItemId, mult) {
+  const item = cartItems.find(i => i.cartItemId === cartItemId);
+  if (!item) return;
+
+  const validMult = Math.max(1, Math.min(5, parseInt(mult, 10) || 1));
+  applyCartItemMultiplier(item, validMult);
+
+  if (item.type === "product") {
+    renderCustomCategories();
+  }
+  updateCartGlobalUI();
+
+  const itemLabel = item.unitKitName || item.unitName || item.name || item.kitName || "Item";
+  if (validMult > 1) {
+    showToastNotification(`✨ ${itemLabel} repetido em ${validMult}x no seu pedido!`);
+  } else {
+    showToastNotification(`${itemLabel} ajustado para 1x.`);
+  }
+};
 
 // Confirmar e adicionar kit ao carrinho
 document.getElementById("btn-confirm-kit").addEventListener("click", () => {
@@ -1226,6 +1410,7 @@ document.getElementById("btn-confirm-kit").addEventListener("click", () => {
 
   const { flavorExtraCost, flavorBreakdown, saucesCost, selectedSaucesList, totalExtras } = calculateKitExtras();
   const finalKitPrice = activeCustomizingKit.price + totalExtras;
+  const chosenMult = Math.max(1, Math.min(5, currentKitRepeatMultiplier || 1));
 
   // Montar objeto detalhado dos sabores escolhidos
   const selectedFlavorsList = [];
@@ -1244,53 +1429,86 @@ document.getElementById("btn-confirm-kit").addEventListener("click", () => {
   if (activeCustomizingCombo) {
     const regularVal = activeCustomizingCombo.regularPrice || activeCustomizingCombo.price;
     const savings = Math.max(0, regularVal - activeCustomizingCombo.price);
+    const comboName = activeCustomizingCombo.name;
 
     const comboCartItem = {
       cartItemId: Date.now().toString(),
       type: "combo",
       comboId: activeCustomizingCombo.id,
-      name: activeCustomizingCombo.name,
+      name: comboName,
+      unitName: comboName,
       badge: activeCustomizingCombo.badge,
+      repeatCount: 1,
       comboPrice: activeCustomizingCombo.price,
+      unitComboPrice: activeCustomizingCombo.price,
       regularPrice: regularVal,
+      unitRegularPrice: regularVal,
       savings: savings,
+      unitSavings: savings,
       discountPercent: activeCustomizingCombo.discountPercent || (regularVal > 0 ? Math.round((savings / regularVal) * 100) : 0),
       totalQuantity: activeCustomizingKit.quantity,
-      flavors: selectedFlavorsList,
-      sauces: selectedSaucesList,
-      items: activeCustomizingCombo.items,
+      unitTotalQuantity: activeCustomizingKit.quantity,
+      flavors: JSON.parse(JSON.stringify(selectedFlavorsList)),
+      unitFlavors: JSON.parse(JSON.stringify(selectedFlavorsList)),
+      sauces: JSON.parse(JSON.stringify(selectedSaucesList)),
+      unitSauces: JSON.parse(JSON.stringify(selectedSaucesList)),
+      items: JSON.parse(JSON.stringify(activeCustomizingCombo.items || [])),
+      unitItems: JSON.parse(JSON.stringify(activeCustomizingCombo.items || [])),
       flavorExtraCost: flavorExtraCost,
+      unitFlavorExtraCost: flavorExtraCost,
       saucesCost: saucesCost,
+      unitSaucesCost: saucesCost,
       finalPrice: activeCustomizingCombo.price + totalExtras,
-      extrasBreakdown: flavorBreakdown
+      unitFinalPrice: activeCustomizingCombo.price + totalExtras,
+      extrasBreakdown: JSON.parse(JSON.stringify(flavorBreakdown)),
+      unitExtrasBreakdown: JSON.parse(JSON.stringify(flavorBreakdown))
     };
+
+    if (chosenMult > 1) {
+      applyCartItemMultiplier(comboCartItem, chosenMult);
+    }
 
     cartItems.push(comboCartItem);
     closeKitCustomizer();
     updateCartGlobalUI();
-    showToastNotification(`🔥 ${activeCustomizingCombo.name} adicionado ao pedido!`);
+    showToastNotification(chosenMult > 1 ? `🔥 ${chosenMult}x ${comboName} adicionado ao pedido!` : `🔥 ${comboName} adicionado ao pedido!`);
     return;
   }
 
+  const baseKitName = activeCustomizingKit.name;
   const cartItem = {
     cartItemId: Date.now().toString(),
     type: "kit",
     kitId: activeCustomizingKit.id,
-    kitName: activeCustomizingKit.name,
+    kitName: baseKitName,
+    unitKitName: baseKitName,
+    repeatCount: 1,
     basePrice: activeCustomizingKit.price,
+    unitBasePrice: activeCustomizingKit.price,
     flavorExtraCost: flavorExtraCost,
+    unitFlavorExtraCost: flavorExtraCost,
     saucesCost: saucesCost,
+    unitSaucesCost: saucesCost,
     finalPrice: finalKitPrice,
+    unitFinalPrice: finalKitPrice,
     totalQuantity: activeCustomizingKit.quantity,
-    flavors: selectedFlavorsList,
-    sauces: selectedSaucesList,
-    extrasBreakdown: flavorBreakdown
+    unitTotalQuantity: activeCustomizingKit.quantity,
+    flavors: JSON.parse(JSON.stringify(selectedFlavorsList)),
+    unitFlavors: JSON.parse(JSON.stringify(selectedFlavorsList)),
+    sauces: JSON.parse(JSON.stringify(selectedSaucesList)),
+    unitSauces: JSON.parse(JSON.stringify(selectedSaucesList)),
+    extrasBreakdown: JSON.parse(JSON.stringify(flavorBreakdown)),
+    unitExtrasBreakdown: JSON.parse(JSON.stringify(flavorBreakdown))
   };
+
+  if (chosenMult > 1) {
+    applyCartItemMultiplier(cartItem, chosenMult);
+  }
 
   cartItems.push(cartItem);
   closeKitCustomizer();
   updateCartGlobalUI();
-  showToastNotification("Kit adicionado ao seu pedido com sucesso!");
+  showToastNotification(chosenMult > 1 ? `✨ ${chosenMult}x ${baseKitName} adicionado ao seu pedido!` : "Kit adicionado ao seu pedido com sucesso!");
 });
 
 // ==============================================================================
@@ -1314,6 +1532,7 @@ function calculateOrderTotal() {
 function getCartItemsCount() {
   return cartItems.reduce((acc, item) => {
     if (item.type === "product") return acc + item.quantity;
+    if (item.type === "kit" || item.type === "combo") return acc + (item.repeatCount || 1);
     return acc + 1;
   }, 0);
 }
@@ -1402,6 +1621,23 @@ function updateCartGlobalUI() {
   renderCartDrawerItems();
 }
 
+function buildRepeatPillsBarHtml(cartItemId, currentMult) {
+  const cur = Math.max(1, parseInt(currentMult, 10) || 1);
+  let pills = "";
+  for (let m = 1; m <= 5; m++) {
+    const activeClass = cur === m ? "active" : "";
+    pills += `<button type="button" class="cart-repeat-pill ${activeClass}" onclick="setCartItemRepeatMultiplier('${cartItemId}', ${m})">${m}x</button>`;
+  }
+  return `
+    <div class="cart-item-repeat-bar">
+      <span class="cart-item-repeat-label"><i class="fa-solid fa-clone"></i> Repetir esta escolha:</span>
+      <div class="cart-item-repeat-pills">
+        ${pills}
+      </div>
+    </div>
+  `;
+}
+
 function renderCartDrawerItems() {
   const container = document.getElementById("order-items-container");
   if (!container) return;
@@ -1414,6 +1650,7 @@ function renderCartDrawerItems() {
   let html = "";
   cartItems.forEach(item => {
     if (item.type === "kit") {
+      const mult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
       let flavorsText = item.flavors.map(f => `• ${f.quantity}x ${f.name}`).join("<br>");
       
       let extrasHtml = "";
@@ -1429,11 +1666,18 @@ function renderCartDrawerItems() {
         </div>`;
       }
 
+      const unitPriceHint = mult > 1 && item.unitFinalPrice
+        ? `<div style="font-size: 0.76rem; color: #64748b; font-weight: 600;">${mult}x de ${formatBRL(item.unitFinalPrice)}</div>`
+        : "";
+
       html += `
         <div class="cart-item-block">
           <div class="cart-item-header">
             <span class="cart-item-title">${item.kitName}</span>
-            <span class="cart-item-price">${formatBRL(item.finalPrice)}</span>
+            <div style="text-align: right;">
+              <span class="cart-item-price">${formatBRL(item.finalPrice)}</span>
+              ${unitPriceHint}
+            </div>
           </div>
           <div class="cart-item-flavors-breakdown">
             <strong>Sabores escolhidos (${item.totalQuantity} un):</strong><br>
@@ -1441,12 +1685,14 @@ function renderCartDrawerItems() {
             ${extrasHtml}
             ${saucesHtml}
           </div>
+          ${buildRepeatPillsBarHtml(item.cartItemId, mult)}
           <button class="btn-remove-item" onclick="removeCartItem('${item.cartItemId}')">
             <i class="fa-solid fa-trash-can"></i> Remover Kit
           </button>
         </div>
       `;
     } else if (item.type === "combo") {
+      const mult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
       let itemsListHtml = (item.items || []).map(i => `• ${i.quantity}x ${i.name}`).join("<br>");
       let flavorsHtml = "";
       if (item.flavors && item.flavors.length > 0) {
@@ -1460,11 +1706,18 @@ function renderCartDrawerItems() {
         extrasHtml += `<div style="color: #047857; font-weight: 700; margin-top: 4px;">Molhos extras: + ${formatBRL(item.saucesCost)}</div>`;
       }
 
+      const unitPriceHint = mult > 1 && item.unitFinalPrice
+        ? `<div style="font-size: 0.76rem; color: #64748b; font-weight: 600;">${mult}x de ${formatBRL(item.unitFinalPrice)}</div>`
+        : "";
+
       html += `
         <div class="cart-item-block">
           <div class="cart-item-header">
             <span class="cart-item-title"><i class="fa-solid fa-fire" style="color:#ef4444;"></i> ${item.name}</span>
-            <span class="cart-item-price">${formatBRL(item.finalPrice)}</span>
+            <div style="text-align: right;">
+              <span class="cart-item-price">${formatBRL(item.finalPrice)}</span>
+              ${unitPriceHint}
+            </div>
           </div>
           <div style="background:#dcfce7; color:#15803d; font-size:0.78rem; font-weight:800; padding:3px 8px; border-radius:6px; margin: 4px 0 6px; display:inline-block;">
             ⚡ Economia de ${formatBRL(item.savings)} (${item.discountPercent || 15}% OFF)
@@ -1475,6 +1728,7 @@ function renderCartDrawerItems() {
             ${flavorsHtml}
             ${extrasHtml}
           </div>
+          ${buildRepeatPillsBarHtml(item.cartItemId, mult)}
           <button class="btn-remove-item" onclick="removeCartItem('${item.cartItemId}')">
             <i class="fa-solid fa-trash-can"></i> Remover Combo
           </button>
@@ -1495,6 +1749,7 @@ function renderCartDrawerItems() {
               <button class="btn-stepper-btn plus" onclick="changeProductCartQty('${item.productId}', 1)" title="Aumentar"><i class="fa-solid fa-plus"></i></button>
             </div>
           </div>
+          ${buildRepeatPillsBarHtml(item.cartItemId, item.quantity)}
           <button class="btn-remove-item" onclick="removeCartItem('${item.cartItemId}')">
             <i class="fa-solid fa-trash-can"></i> Remover Item
           </button>
@@ -2583,8 +2838,8 @@ window.repeatCustomerLastOrder = function() {
     cartItemId: "rep_" + Date.now() + "_" + Math.floor(Math.random() * 10000)
   }));
 
+  renderCustomCategories();
   updateCartGlobalUI();
-  renderOrderItemsInDrawer();
   window.openCheckoutDrawer();
   showToastNotification("✨ Último pedido carregado na sacola!");
 };

@@ -179,13 +179,26 @@
 
     <!-- Rodapé do Modal com Resumo de Adicionais e Ação -->
     <div class="modal-bottom">
+      <div class="customizer-repeat-selector" id="customizer-repeat-selector">
+        <div class="repeat-selector-label">
+          <i class="fa-solid fa-clone"></i>
+          <span>Repetir esta escolha (Multiplicar Kit):</span>
+        </div>
+        <div class="repeat-selector-pills" id="customizer-repeat-pills">
+          <button type="button" class="repeat-pill active" data-mult="1" onclick="setCustomizerRepeatMultiplier(1)">1x</button>
+          <button type="button" class="repeat-pill" data-mult="2" onclick="setCustomizerRepeatMultiplier(2)">2x</button>
+          <button type="button" class="repeat-pill" data-mult="3" onclick="setCustomizerRepeatMultiplier(3)">3x</button>
+          <button type="button" class="repeat-pill" data-mult="4" onclick="setCustomizerRepeatMultiplier(4)">4x</button>
+          <button type="button" class="repeat-pill" data-mult="5" onclick="setCustomizerRepeatMultiplier(5)">5x</button>
+        </div>
+      </div>
       <div class="customizer-totals">
         <div class="customizer-extra-row" id="customizer-extra-row" style="display: none;">
           <span>Adicionais especiais:</span>
           <span id="customizer-extra-value">+ R$ 0,00</span>
         </div>
         <div class="customizer-total-row">
-          <span>Total deste Kit:</span>
+          <span id="customizer-total-label">Total deste Kit:</span>
           <strong id="customizer-total-price">R$ 0,00</strong>
         </div>
       </div>
@@ -528,9 +541,9 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=48.0"></script>
-  <script src="vip-whatsapp.js?v=48.0"></script>
-  <script src="app.js?v=48.0"></script>
-  <script src="pwa.js?v=48.0"></script>
+  <script src="shared-data.js?v=53.0"></script>
+  <script src="vip-whatsapp.js?v=53.0"></script>
+  <script src="app.js?v=53.0"></script>
+  <script src="pwa.js?v=53.0"></script>
 </body>
 </html>
