@@ -1,7 +1,7 @@
 // ==============================================================================
 // SERVICE WORKER - SALGADOS VIP PWA (DELIVERY & COZINHA)
 // ==============================================================================
-const CACHE_NAME = 'salgados-vip-cache-v60-0';
+const CACHE_NAME = 'salgados-vip-cache-v61-0';
 
 const STATIC_PRECACHE_ASSETS = [
   './',

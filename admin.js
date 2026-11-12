@@ -4732,7 +4732,16 @@ function renderCategoryItemsManagerList() {
           </div>
         </div>
 
-        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+          <!-- Edição Rápida de Preço na mesma linha -->
+          <div style="display:inline-flex; align-items:center; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:2px 4px 2px 8px; gap:4px;" title="Altere o valor e clique no botão verde (ou pressione Enter) para atualizar o preço na hora">
+            <span style="font-size:0.74rem; font-weight:800; color:#475569;">R$</span>
+            <input type="number" id="quick-price-input-${prod.id}" step="0.50" min="0" value="${Number(prod.price || 0).toFixed(2)}" onkeydown="if(event.key==='Enter'){ event.preventDefault(); saveCategoryItemQuickPrice('${prod.id}'); }" style="width:66px; border:none; background:transparent; font-size:0.84rem; font-weight:800; color:#0f172a; padding:4px 2px; outline:none; text-align:right;">
+            <button type="button" onclick="saveCategoryItemQuickPrice('${prod.id}')" title="Salvar novo preço em tempo real" style="background:#059669; color:#ffffff; border:none; border-radius:6px; padding:5px 8px; font-size:0.75rem; font-weight:800; cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+              <i class="fa-solid fa-check"></i>
+            </button>
+          </div>
+
           ${isFromOtherCat ? `
             <button type="button" onclick="assignItemToCategoryQuick('${prod.id}', '${categoryId}')" title="Mover/Vincular este item para a categoria ${escapeHtml(catName)}" style="background:#f8fafc; color:#334155; border:1px solid #cbd5e1; padding:6px 9px; border-radius:8px; font-size:0.74rem; font-weight:700; cursor:pointer;">
               <i class="fa-solid fa-arrow-right-to-bracket"></i> Trazer p/ cá
@@ -4800,6 +4809,32 @@ window.openNewProductForCategory = function() {
   openProductModal();
   if (categoryId) {
     populateCategorySelect(categoryId);
+  }
+};
+
+window.saveCategoryItemQuickPrice = function(productId) {
+  const input = document.getElementById(`quick-price-input-${productId}`);
+  if (!input) return;
+
+  const rawVal = String(input.value || "").replace(",", ".");
+  const newPrice = parseFloat(rawVal);
+  if (isNaN(newPrice) || newPrice < 0) {
+    alert("Informe um valor válido para o produto.");
+    return;
+  }
+
+  const products = VIPDatabase.getProducts();
+  const prod = products.find(p => p.id === productId);
+  if (!prod) return;
+
+  prod.price = newPrice;
+  VIPDatabase.saveProducts(products);
+  renderProductsTable();
+  renderCategoriesTable();
+  renderCategoryItemsManagerList();
+
+  if (typeof showToastNotification === "function") {
+    showToastNotification(`💰 Preço de "${prod.name}" atualizado para ${formatBRL(newPrice)} em tempo real!`);
   }
 };
 
