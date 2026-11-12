@@ -4153,17 +4153,34 @@ function renderCategoriesTable() {
   categories.forEach((cat, index) => {
     const tr = document.createElement("tr");
     attachDraggableRowListeners(tr, "categories", index);
-    const count = products.filter(p => p.categoryId === cat.id).length;
+    const catProds = products.filter(p => p.categoryId === cat.id);
+    const count = catProds.length;
+    const activeCount = catProds.filter(p => p.active !== false).length;
+    const pausedCount = count - activeCount;
+
     const statusBadge = cat.active !== false
       ? `<span class="badge-status-item active"><i class="fa-solid fa-circle-check"></i> Ativa</span>`
       : `<span class="badge-status-item inactive"><i class="fa-solid fa-circle-xmark"></i> Pausada</span>`;
+
+    const subStatusPill = count > 0
+      ? (pausedCount > 0
+          ? `<span style="background:#fef2f2; color:#dc2626; border:1px solid #fecaca; padding:1px 7px; border-radius:999px; font-size:0.72rem; font-weight:700;">${activeCount} ativo(s) • ${pausedCount} pausado(s)</span>`
+          : `<span style="background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; padding:1px 7px; border-radius:999px; font-size:0.72rem; font-weight:700;">${activeCount} ativo(s)</span>`)
+      : `<span style="background:#f1f5f9; color:#475569; border:1px solid #cbd5e1; padding:1px 7px; border-radius:999px; font-size:0.72rem; font-weight:700;">Ver todos itens</span>`;
 
     tr.innerHTML = `
       ${buildDragHandleCell("categories", index, categories.length, cat.name)}
       <td style="font-size: 1.25rem; text-align: center; color: #f59e0b;"><i class="fa-solid ${cat.icon || 'fa-tag'}"></i></td>
       <td><strong>${cat.name}</strong></td>
       <td>${cat.description || '<span style="color:#94a3b8;">Sem descrição</span>'}</td>
-      <td><span class="badge-step-item"><i class="fa-solid fa-box"></i> ${count} ${count === 1 ? 'item' : 'itens'}</span></td>
+      <td>
+        <button type="button" onclick="openCategoryItemsManager('${cat.id}')" title="Clique para listar os itens e pausar/ativar individualmente em tempo real" style="display:inline-flex; align-items:center; gap:7px; background:#eff6ff; color:#1d4ed8; border:1.5px solid #93c5fd; padding:6px 12px; border-radius:999px; font-size:0.82rem; font-weight:700; cursor:pointer; box-shadow:0 1px 2px rgba(29,78,216,0.08); transition:all 0.18s ease;">
+          <i class="fa-solid fa-box-open"></i>
+          <span>${count} ${count === 1 ? 'item' : 'itens'}</span>
+          ${subStatusPill}
+          <i class="fa-solid fa-chevron-right" style="font-size:0.7rem; opacity:0.75;"></i>
+        </button>
+      </td>
       <td>${statusBadge}</td>
       <td class="text-right">
         <div class="table-actions">
@@ -4368,9 +4385,20 @@ window.toggleProductStatus = function(id) {
   const products = VIPDatabase.getProducts();
   const prod = products.find(p => p.id === id);
   if (prod) {
-    prod.active = !prod.active;
+    prod.active = prod.active === false ? true : false;
     VIPDatabase.saveProducts(products);
     renderProductsTable();
+    renderCategoriesTable();
+    if (window._activeCatItemsModalId) {
+      renderCategoryItemsManagerList();
+    }
+    if (typeof showToastNotification === "function") {
+      showToastNotification(
+        prod.active
+          ? `🟢 "${prod.name}" ativado e visível no cardápio em tempo real!`
+          : `🔴 "${prod.name}" pausado no cardápio em tempo real!`
+      );
+    }
   }
 };
 
@@ -4488,6 +4516,292 @@ const catBackdrop = document.getElementById("modal-category-backdrop");
 if (catBackdrop) catBackdrop.addEventListener("click", closeCategoryModal);
 const prodBackdrop = document.getElementById("modal-product-backdrop");
 if (prodBackdrop) prodBackdrop.addEventListener("click", closeProductModal);
+
+// =============================================================================
+// 6.1 GERENCIADOR RÁPIDO DE ITENS POR CATEGORIA (CLIQUE EM "TOTAL DE ITENS")
+// Lista todos os itens da categoria (ou todos os existentes) com pausa em 1 clique
+// =============================================================================
+window._activeCatItemsModalId = null;
+window._activeCatItemsScope = "category"; // "category" | "all"
+window._activeCatItemsSearch = "";
+
+function ensureCategoryItemsManagerModal() {
+  if (document.getElementById("modal-cat-items-manager")) return;
+
+  const backdrop = document.createElement("div");
+  backdrop.id = "modal-cat-items-manager-backdrop";
+  backdrop.className = "adm-modal-backdrop";
+  backdrop.onclick = () => window.closeCategoryItemsManager();
+
+  const modal = document.createElement("div");
+  modal.id = "modal-cat-items-manager";
+  modal.className = "adm-modal";
+  modal.style.maxWidth = "680px";
+  modal.style.width = "95%";
+
+  modal.innerHTML = `
+    <div class="adm-modal-header" style="background:#f8fafc; border-bottom:1px solid #e2e8f0; padding:1rem 1.35rem;">
+      <div>
+        <h3 id="cat-items-modal-title" style="margin:0; font-size:1.1rem; color:#0f172a; display:flex; align-items:center; gap:8px;">
+          <i class="fa-solid fa-boxes-stacked" style="color:#2563eb;"></i> Itens da Categoria
+        </h3>
+        <p id="cat-items-modal-subtitle" style="margin:3px 0 0 0; font-size:0.8rem; color:#64748b;">
+          Pause ou ative qualquer item individualmente. O cardápio do cliente atualiza na mesma hora.
+        </p>
+      </div>
+      <button type="button" class="btn-close-modal" onclick="closeCategoryItemsManager()"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <div class="adm-modal-body" style="padding:1.15rem 1.35rem; max-height:72vh; overflow-y:auto;">
+      <!-- Barra de Escopo (Itens desta Categoria vs Todos os Itens Existentes) -->
+      <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:12px;">
+        <div style="display:inline-flex; background:#f1f5f9; padding:3px; border-radius:10px; border:1px solid #e2e8f0;">
+          <button type="button" id="btn-cat-scope-current" onclick="setCategoryItemsScope('category')" style="border:none; padding:6px 12px; border-radius:8px; font-size:0.8rem; font-weight:700; cursor:pointer; background:#ffffff; color:#0f172a; box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+            Desta Categoria
+          </button>
+          <button type="button" id="btn-cat-scope-all" onclick="setCategoryItemsScope('all')" style="border:none; padding:6px 12px; border-radius:8px; font-size:0.8rem; font-weight:700; cursor:pointer; background:transparent; color:#64748b;">
+            Todos os Itens do Cardápio
+          </button>
+        </div>
+
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <button type="button" onclick="bulkToggleCategoryItems(true)" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; padding:6px 11px; border-radius:8px; font-size:0.78rem; font-weight:700; cursor:pointer;">
+            <i class="fa-solid fa-circle-check"></i> Ativar Todos
+          </button>
+          <button type="button" onclick="bulkToggleCategoryItems(false)" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; padding:6px 11px; border-radius:8px; font-size:0.78rem; font-weight:700; cursor:pointer;">
+            <i class="fa-solid fa-pause"></i> Pausar Todos
+          </button>
+          <button type="button" onclick="openNewProductForCategory()" style="background:#2563eb; color:#ffffff; border:none; padding:6px 12px; border-radius:8px; font-size:0.78rem; font-weight:700; cursor:pointer;">
+            <i class="fa-solid fa-plus"></i> Novo Item Aqui
+          </button>
+        </div>
+      </div>
+
+      <!-- Busca Rápida -->
+      <div style="position:relative; margin-bottom:12px;">
+        <i class="fa-solid fa-magnifying-glass" style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#94a3b8; font-size:0.85rem;"></i>
+        <input type="text" id="cat-items-search-input" placeholder="Buscar item pelo nome..." oninput="onCategoryItemsSearch(this.value)" style="width:100%; padding:8px 12px 8px 34px; border:1px solid #cbd5e1; border-radius:8px; font-size:0.86rem;">
+      </div>
+
+      <!-- Lista de Itens -->
+      <div id="cat-items-manager-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <div class="adm-modal-footer" style="padding:0.9rem 1.35rem; background:#f8fafc; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+      <span id="cat-items-modal-counter" style="font-size:0.8rem; color:#475569; font-weight:600;"></span>
+      <button type="button" class="btn-primary-admin" onclick="closeCategoryItemsManager()">Concluir e Fechar</button>
+    </div>
+  `;
+
+  document.body.appendChild(backdrop);
+  document.body.appendChild(modal);
+}
+
+window.openCategoryItemsManager = function(categoryId) {
+  ensureCategoryItemsManagerModal();
+  window._activeCatItemsModalId = categoryId;
+  window._activeCatItemsSearch = "";
+
+  const searchInput = document.getElementById("cat-items-search-input");
+  if (searchInput) searchInput.value = "";
+
+  const products = VIPDatabase.getProducts();
+  const catProds = products.filter(p => p.categoryId === categoryId);
+  // Se a categoria recém-criada ainda não tiver itens vinculados, mostra todos os itens existentes para facilitar!
+  window._activeCatItemsScope = catProds.length > 0 ? "category" : "all";
+
+  renderCategoryItemsManagerList();
+
+  document.getElementById("modal-cat-items-manager").classList.add("active");
+  document.getElementById("modal-cat-items-manager-backdrop").classList.add("active");
+};
+
+window.closeCategoryItemsManager = function() {
+  window._activeCatItemsModalId = null;
+  const modal = document.getElementById("modal-cat-items-manager");
+  const backdrop = document.getElementById("modal-cat-items-manager-backdrop");
+  if (modal) modal.classList.remove("active");
+  if (backdrop) backdrop.classList.remove("active");
+};
+
+window.setCategoryItemsScope = function(scope) {
+  window._activeCatItemsScope = scope;
+  renderCategoryItemsManagerList();
+};
+
+window.onCategoryItemsSearch = function(val) {
+  window._activeCatItemsSearch = String(val || "").trim().toLowerCase();
+  renderCategoryItemsManagerList();
+};
+
+function renderCategoryItemsManagerList() {
+  const categoryId = window._activeCatItemsModalId;
+  if (!categoryId) return;
+
+  const categories = VIPDatabase.getCategories();
+  const products = VIPDatabase.getProducts();
+  const currentCat = categories.find(c => c.id === categoryId);
+  const catName = currentCat ? currentCat.name : "Categoria";
+
+  const titleEl = document.getElementById("cat-items-modal-title");
+  if (titleEl) {
+    titleEl.innerHTML = `<i class="fa-solid ${currentCat?.icon || 'fa-boxes-stacked'}" style="color:#f59e0b;"></i> Itens: ${escapeHtml(catName)}`;
+  }
+
+  const catOnlyProds = products.filter(p => p.categoryId === categoryId);
+  const btnCurrent = document.getElementById("btn-cat-scope-current");
+  const btnAll = document.getElementById("btn-cat-scope-all");
+  if (btnCurrent && btnAll) {
+    btnCurrent.textContent = `Desta Categoria (${catOnlyProds.length})`;
+    btnAll.textContent = `Todos os Itens Existentes (${products.length})`;
+    if (window._activeCatItemsScope === "category") {
+      btnCurrent.style.background = "#ffffff";
+      btnCurrent.style.color = "#0f172a";
+      btnCurrent.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+      btnAll.style.background = "transparent";
+      btnAll.style.color = "#64748b";
+      btnAll.style.boxShadow = "none";
+    } else {
+      btnAll.style.background = "#ffffff";
+      btnAll.style.color = "#0f172a";
+      btnAll.style.boxShadow = "0 1px 2px rgba(0,0,0,0.06)";
+      btnCurrent.style.background = "transparent";
+      btnCurrent.style.color = "#64748b";
+      btnCurrent.style.boxShadow = "none";
+    }
+  }
+
+  let list = window._activeCatItemsScope === "category" ? catOnlyProds : products;
+  if (window._activeCatItemsSearch) {
+    list = list.filter(p => String(p.name || "").toLowerCase().includes(window._activeCatItemsSearch));
+  }
+
+  const container = document.getElementById("cat-items-manager-list");
+  const counterEl = document.getElementById("cat-items-modal-counter");
+  if (!container) return;
+
+  const activeCount = list.filter(p => p.active !== false).length;
+  const pausedCount = list.length - activeCount;
+  if (counterEl) {
+    counterEl.innerHTML = `<span style="color:#15803d;">● ${activeCount} disponível(is)</span> &nbsp;|&nbsp; <span style="color:#dc2626;">● ${pausedCount} pausado(s)</span>`;
+  }
+
+  if (list.length === 0) {
+    container.innerHTML = `
+      <div style="text-align:center; padding:2rem 1rem; background:#f8fafc; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b;">
+        <i class="fa-solid fa-box-open" style="font-size:1.8rem; color:#94a3b8; margin-bottom:8px;"></i>
+        <p style="margin:0 0 10px 0; font-weight:600;">Nenhum item encontrado nesta visualização.</p>
+        <div style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap;">
+          ${window._activeCatItemsScope === "category" && products.length > 0 ? `
+            <button type="button" onclick="setCategoryItemsScope('all')" style="background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; padding:7px 14px; border-radius:8px; font-weight:700; cursor:pointer;">
+              Ver Todos os ${products.length} Itens Existentes
+            </button>
+          ` : ""}
+          <button type="button" onclick="openNewProductForCategory()" style="background:#2563eb; color:#fff; border:none; padding:7px 14px; border-radius:8px; font-weight:700; cursor:pointer;">
+            + Cadastrar Novo Produto Aqui
+          </button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = list.map(prod => {
+    const isActive = prod.active !== false;
+    const itemCat = categories.find(c => c.id === prod.categoryId);
+    const itemCatName = itemCat ? itemCat.name : "Sem Categoria";
+    const isFromOtherCat = prod.categoryId !== categoryId;
+    const thumb = prod.image || (window.DEFAULT_IMAGE_PLACEHOLDERS && window.DEFAULT_IMAGE_PLACEHOLDERS.product) || "";
+
+    return `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; border-radius:10px; border:1.5px solid ${isActive ? '#e2e8f0' : '#fecaca'}; background:${isActive ? '#ffffff' : '#fff5f5'}; transition:all 0.15s ease;">
+        <div style="display:flex; align-items:center; gap:10px; min-width:0; flex:1;">
+          <img src="${thumb}" alt="${escapeHtml(prod.name)}" style="width:42px; height:42px; border-radius:8px; object-fit:cover; border:1px solid #e2e8f0; flex-shrink:0; ${isActive ? '' : 'filter:grayscale(85%); opacity:0.65;'}" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'42\\' height=\\'42\\'><rect width=\\'100%\\' height=\\'100%\\' fill=\\'%23f8fafc\\'/><text x=\\'50%\\' y=\\'50%\\' dominant-baseline=\\'middle\\' text-anchor=\\'middle\\' font-size=\\'16\\'>🥤</text></svg>'">
+          <div style="min-width:0;">
+            <div style="font-weight:800; font-size:0.92rem; color:${isActive ? '#0f172a' : '#7f1d1d'}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              ${escapeHtml(prod.name)}
+            </div>
+            <div style="display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:2px; font-size:0.78rem;">
+              <strong style="color:#059669;">${formatBRL(prod.price)}</strong>
+              <span style="color:#cbd5e1;">•</span>
+              <span style="color:#64748b;"><i class="fa-solid fa-tag"></i> ${escapeHtml(itemCatName)}</span>
+              <span style="padding:1px 7px; border-radius:999px; font-size:0.7rem; font-weight:700; background:${isActive ? '#dcfce7' : '#fee2e2'}; color:${isActive ? '#15803d' : '#b91c1c'};">
+                ${isActive ? '🟢 Disponível no Cardápio' : '🔴 Pausado / Esgotado'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:center; gap:6px; flex-shrink:0;">
+          ${isFromOtherCat ? `
+            <button type="button" onclick="assignItemToCategoryQuick('${prod.id}', '${categoryId}')" title="Mover/Vincular este item para a categoria ${escapeHtml(catName)}" style="background:#f8fafc; color:#334155; border:1px solid #cbd5e1; padding:6px 9px; border-radius:8px; font-size:0.74rem; font-weight:700; cursor:pointer;">
+              <i class="fa-solid fa-arrow-right-to-bracket"></i> Trazer p/ cá
+            </button>
+          ` : ""}
+          <button type="button" onclick="toggleProductStatus('${prod.id}')" style="min-width:118px; display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:7px 12px; border-radius:8px; font-size:0.8rem; font-weight:800; cursor:pointer; border:1.5px solid ${isActive ? '#fca5a5' : '#86efac'}; background:${isActive ? '#fef2f2' : '#dcfce7'}; color:${isActive ? '#dc2626' : '#15803d'}; transition:all 0.15s ease;">
+            <i class="fa-solid ${isActive ? 'fa-pause' : 'fa-play'}"></i>
+            <span>${isActive ? 'Pausar Item' : 'Ativar Item'}</span>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+window.bulkToggleCategoryItems = function(makeActive) {
+  const categoryId = window._activeCatItemsModalId;
+  if (!categoryId) return;
+
+  const products = VIPDatabase.getProducts();
+  let changed = 0;
+  products.forEach(p => {
+    if (window._activeCatItemsScope === "all" || p.categoryId === categoryId) {
+      if ((p.active !== false) !== Boolean(makeActive)) {
+        p.active = Boolean(makeActive);
+        changed++;
+      }
+    }
+  });
+
+  if (changed > 0) {
+    VIPDatabase.saveProducts(products);
+    renderProductsTable();
+    renderCategoriesTable();
+    renderCategoryItemsManagerList();
+    if (typeof showToastNotification === "function") {
+      showToastNotification(
+        makeActive
+          ? `🟢 ${changed} item(ns) ativado(s) no cardápio em tempo real!`
+          : `🔴 ${changed} item(ns) pausado(s) no cardápio em tempo real!`
+      );
+    }
+  } else {
+    renderCategoryItemsManagerList();
+  }
+};
+
+window.assignItemToCategoryQuick = function(productId, targetCategoryId) {
+  const products = VIPDatabase.getProducts();
+  const prod = products.find(p => p.id === productId);
+  if (!prod) return;
+  prod.categoryId = targetCategoryId;
+  VIPDatabase.saveProducts(products);
+  renderProductsTable();
+  renderCategoriesTable();
+  renderCategoryItemsManagerList();
+  if (typeof showToastNotification === "function") {
+    showToastNotification(`✓ "${prod.name}" vinculado a esta categoria com sucesso!`);
+  }
+};
+
+window.openNewProductForCategory = function() {
+  const categoryId = window._activeCatItemsModalId;
+  closeCategoryItemsManager();
+  openProductModal();
+  if (categoryId) {
+    populateCategorySelect(categoryId);
+  }
+};
 
 // ==========================================
 // 6.5. GERENCIAMENTO DE COMBOS PROMOCIONAIS (CRUD & BUILDER INTELIGENTE)

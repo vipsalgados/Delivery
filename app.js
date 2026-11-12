@@ -3100,20 +3100,34 @@ window.addEventListener("vip_supabase_synced", () => {
   checkStoreStatus();
 });
 
-// Atualiza imediatamente se o administrador alterar configurações em outra aba
+// Atualiza imediatamente se o administrador alterar configurações em outra aba ou via Nuvem Realtime
 window.addEventListener("storage", (e) => {
   if (e.key === "salgados_vip_config" || e.key === "vip_store_config") {
     renderStoreBranding();
     checkStoreStatus();
   }
-  if (e.key === "salgados_vip_kits" || e.key === "salgados_vip_flavors" || e.key === "salgados_vip_combos" || e.key === "salgados_vip_products") {
+  if (
+    e.key === "salgados_vip_kits" ||
+    e.key === "salgados_vip_flavors" ||
+    e.key === "salgados_vip_combos" ||
+    e.key === "salgados_vip_products" ||
+    e.key === "salgados_vip_categories"
+  ) {
     renderCombos();
     renderKits();
+    renderCategoryNav();
     renderCustomCategories();
   }
   if (e.key === "salgados_vip_customer_profile" || e.key === "salgados_vip_customer_last_order") {
     renderCustomerUI();
   }
+});
+
+window.addEventListener("vip_catalog_updated", () => {
+  renderCombos();
+  renderKits();
+  renderCategoryNav();
+  renderCustomCategories();
 });
 
 

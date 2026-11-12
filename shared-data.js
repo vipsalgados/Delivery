@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v59.0 (Bkp 59)";
+window.VIP_APP_VERSION = "v60.0 (Bkp 60)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -2862,12 +2862,56 @@ const VIPDatabase = {
         .on("postgres_changes", { event: "*", schema: "public", table: "orders" }, (payload) => {
           this.handleRealtimeOrderPayload(payload);
         })
+        .on("postgres_changes", { event: "*", schema: "public", table: "products" }, (payload) => {
+          this.handleRealtimeCatalogPayload("products", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, (payload) => {
+          this.handleRealtimeCatalogPayload("categories", payload);
+        })
         .subscribe((status) => {
           console.log("[Supabase Realtime] Status do canal:", status);
           window.dispatchEvent(new CustomEvent("vip_supabase_status", { detail: { status } }));
         });
     } catch (e) {
       console.warn("[Supabase Realtime] Falha ao assinar canal:", e);
+    }
+  },
+
+  handleRealtimeCatalogPayload(table, payload) {
+    if (!payload) return;
+    const { eventType, new: rowNew, old: rowOld } = payload;
+    if (table === "products") {
+      let prods = this.getProducts();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          categoryId: rowNew.category_id || rowNew.categoryId,
+          price: parseFloat(rowNew.price || 0),
+          active: rowNew.active !== false
+        };
+        const idx = prods.findIndex(p => p.id === mapped.id);
+        if (idx !== -1) prods[idx] = { ...prods[idx], ...mapped };
+        else prods.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        prods = prods.filter(p => p.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.PRODUCTS, JSON.stringify(prods)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "products" } }));
+    } else if (table === "categories") {
+      let cats = this.getCategories();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          active: rowNew.active !== false
+        };
+        const idx = cats.findIndex(c => c.id === mapped.id);
+        if (idx !== -1) cats[idx] = { ...cats[idx], ...mapped };
+        else cats.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        cats = cats.filter(c => c.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cats)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "categories" } }));
     }
   },
 
