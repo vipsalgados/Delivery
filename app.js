@@ -32,12 +32,59 @@ function getCategoriesCatalog() {
 
 function getProductsCatalog() {
   const prods = typeof VIPDatabase !== "undefined" ? VIPDatabase.getProducts() : [];
-  return prods.filter(p => p.active !== false);
+  const allCats = typeof VIPDatabase !== "undefined" ? VIPDatabase.getCategories() : [];
+  return prods.filter(p => {
+    if (p.active === false) return false;
+    if (p.categoryId) {
+      const parentCat = allCats.find(c => c.id === p.categoryId);
+      if (parentCat && parentCat.active === false) return false;
+    }
+    return true;
+  });
+}
+
+function getComboSubItemPauseReason(combo) {
+  if (!combo) return "Este combo não está mais disponível no cardápio.";
+  if (combo.active === false) {
+    return `O combo "${combo.name}" foi pausado temporariamente no cardápio.`;
+  }
+  const allKits = typeof VIPDatabase !== "undefined" ? VIPDatabase.getKits() : [];
+  const allProds = typeof VIPDatabase !== "undefined" ? VIPDatabase.getProducts() : [];
+  const allCats = typeof VIPDatabase !== "undefined" ? VIPDatabase.getCategories() : [];
+  const allSauces = typeof VIPDatabase !== "undefined" ? VIPDatabase.getSauces() : [];
+
+  for (const sub of (combo.items || [])) {
+    if (sub.type === "kit" && sub.id) {
+      const k = allKits.find(x => x.id === sub.id);
+      if (k && k.active === false) {
+        return `O item incluso "${sub.name || k.name}" está pausado/indisponível no momento.`;
+      }
+    } else if (sub.type === "product" && sub.id) {
+      const p = allProds.find(x => x.id === sub.id);
+      if (p) {
+        if (p.active === false) {
+          return `O item incluso "${sub.name || p.name}" acabou de esgotar/ser pausado.`;
+        }
+        if (p.categoryId) {
+          const cat = allCats.find(c => c.id === p.categoryId);
+          if (cat && cat.active === false) {
+            return `A categoria "${cat.name}" (do item "${sub.name || p.name}") foi pausada temporariamente.`;
+          }
+        }
+      }
+    } else if (sub.type === "sauce" && sub.id) {
+      const s = allSauces.find(x => x.id === sub.id);
+      if (s && s.active === false) {
+        return `O molho incluso "${sub.name || s.name}" acabou de esgotar/ser pausado.`;
+      }
+    }
+  }
+  return null;
 }
 
 function getCombosCatalog() {
   const combos = typeof VIPDatabase !== "undefined" ? VIPDatabase.getCombos() : [];
-  return combos.filter(c => c.active !== false);
+  return combos.filter(c => c.active !== false && !getComboSubItemPauseReason(c));
 }
 
 // ESTADO GLOBAL DA APLICAÇÃO
@@ -1673,10 +1720,17 @@ window.addMarketingItemsToCart = function(itemsToAdd) {
     cloned.cartItemId = "fav-" + Date.now() + "-" + Math.floor(Math.random() * 1000);
     cartItems.push(cloned);
   });
+  const hadPaused = typeof window.purgeUnavailableCartAndModalItems === "function"
+    ? window.purgeUnavailableCartAndModalItems({ showAlert: true })
+    : false;
   renderCustomCategories();
   updateCartGlobalUI();
-  openCheckoutDrawer();
-  showToastNotification("🎉 Seu Pedido Favorito foi adicionado à sacola!");
+  if (cartItems.length > 0) {
+    openCheckoutDrawer();
+    if (!hadPaused) {
+      showToastNotification("🎉 Seu Pedido Favorito foi adicionado à sacola!");
+    }
+  }
 };
 
 function buildRepeatPillsBarHtml(cartItemId, currentMult) {
@@ -1821,6 +1875,9 @@ function renderCartDrawerItems() {
 
 // Abertura e fechamento das gavetas
 window.openCheckoutDrawer = function() {
+  if (typeof window.purgeUnavailableCartAndModalItems === "function") {
+    window.purgeUnavailableCartAndModalItems({ showAlert: true });
+  }
   document.getElementById("checkout-drawer").classList.add("active");
   document.getElementById("checkout-backdrop").classList.add("active");
   prefillCustomerCheckoutForm();
@@ -2338,6 +2395,22 @@ window.copyPixCodeToClipboard = function() {
 // 11. FINALIZAÇÃO E ENVIO DO PEDIDO VIA WHATSAPP
 // ==============================================================================
 document.getElementById("btn-finish-whatsapp").addEventListener("click", async () => {
+  if (typeof VIPDatabase !== "undefined" && typeof VIPDatabase.refreshCatalogFromSupabase === "function") {
+    try {
+      await Promise.race([
+        VIPDatabase.refreshCatalogFromSupabase(),
+        new Promise(res => setTimeout(res, 1200))
+      ]);
+    } catch (e) {}
+  }
+
+  if (typeof window.purgeUnavailableCartAndModalItems === "function") {
+    const hadRemovedItems = window.purgeUnavailableCartAndModalItems({ showAlert: true });
+    if (hadRemovedItems) {
+      return;
+    }
+  }
+
   if (cartItems.length === 0) {
     alert("Adicione pelo menos um kit de salgados ou outro item ao seu pedido.");
     return;
@@ -2918,10 +2991,18 @@ window.repeatCustomerLastOrder = function() {
     cartItemId: "rep_" + Date.now() + "_" + Math.floor(Math.random() * 10000)
   }));
 
+  const hadPaused = typeof window.purgeUnavailableCartAndModalItems === "function"
+    ? window.purgeUnavailableCartAndModalItems({ showAlert: true })
+    : false;
+
   renderCustomCategories();
   updateCartGlobalUI();
-  window.openCheckoutDrawer();
-  showToastNotification("✨ Último pedido carregado na sacola!");
+  if (cartItems.length > 0) {
+    window.openCheckoutDrawer();
+    if (!hadPaused) {
+      showToastNotification("✨ Último pedido carregado na sacola!");
+    }
+  }
 };
 
 function prefillCustomerCheckoutForm() {
@@ -3058,10 +3139,455 @@ window.logoutCustomerProfile = function() {
 };
 
 // ==============================================================================
+// 13. GUARDIÃO EM TEMPO REAL DA SACOLA E DO CARDÁPIO (ITENS PAUSADOS / ESGOTADOS)
+// ==============================================================================
+let _cartRecoveryActionsMap = {};
+
+function playCartRemovedAlertTone() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(587.33, now); // D5
+    osc.frequency.setValueAtTime(440.00, now + 0.14); // A4
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch (e) {}
+}
+
+window.closeRemovedItemsAlertModal = function() {
+  const modal = document.getElementById("vip-paused-item-alert-modal");
+  if (modal) modal.style.display = "none";
+};
+
+window.triggerPausedItemSmartAction = function(actionKey) {
+  const fn = _cartRecoveryActionsMap[actionKey];
+  window.closeRemovedItemsAlertModal();
+  if (typeof fn === "function") {
+    fn();
+  }
+};
+
+function showRemovedCartItemsAlertModal(removedEntries) {
+  if (!Array.isArray(removedEntries) || removedEntries.length === 0) return;
+
+  playCartRemovedAlertTone();
+
+  let modal = document.getElementById("vip-paused-item-alert-modal");
+  if (!modal) {
+    modal = document.createElement("div");
+    modal.id = "vip-paused-item-alert-modal";
+    modal.style.cssText = "position:fixed; inset:0; z-index:10050; background:rgba(15,23,42,0.75); backdrop-filter:blur(5px); display:none; align-items:center; justify-content:center; padding:1rem;";
+    document.body.appendChild(modal);
+  }
+
+  _cartRecoveryActionsMap = {};
+
+  const itemsCardsHtml = removedEntries.map((entry, idx) => {
+    let actionBtnHtml = "";
+    if (entry.smartAction && typeof entry.smartAction.onClick === "function") {
+      const actionKey = "act_" + idx + "_" + Date.now();
+      _cartRecoveryActionsMap[actionKey] = entry.smartAction.onClick;
+      actionBtnHtml = `
+        <button type="button" onclick="triggerPausedItemSmartAction('${actionKey}')"
+          style="margin-top:0.65rem; width:100%; padding:0.55rem 0.85rem; border-radius:8px; border:1px solid #f59e0b; background:#fffbeb; color:#b45309; font-weight:800; font-size:0.82rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.45rem; transition:all 0.2s;">
+          <i class="fa-solid ${entry.smartAction.icon || 'fa-rotate'}"></i>
+          <span>${escapeHtml(entry.smartAction.label)}</span>
+        </button>
+      `;
+    }
+
+    return `
+      <div style="background:#fff; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:12px; padding:0.85rem 1rem; box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:0.5rem; margin-bottom:0.3rem; flex-wrap:wrap;">
+          <strong style="color:#0f172a; font-size:0.95rem; font-weight:800;">
+            ${escapeHtml(entry.itemTitle)}
+          </strong>
+          <span style="background:#fee2e2; color:#b91c1c; font-size:0.72rem; font-weight:800; padding:0.18rem 0.55rem; border-radius:999px;">
+            ${escapeHtml(entry.itemTypeBadge || "Indisponível")}
+          </span>
+        </div>
+        <div style="color:#475569; font-size:0.84rem; line-height:1.45;">
+          <i class="fa-solid fa-circle-info" style="color:#ef4444; margin-right:0.25rem;"></i>
+          ${escapeHtml(entry.reasonText)}
+        </div>
+        ${actionBtnHtml}
+      </div>
+    `;
+  }).join("");
+
+  const titleText = removedEntries.length === 1
+    ? "Um item da sua sacola acabou de ser pausado"
+    : `${removedEntries.length} itens da sua sacola foram pausados`;
+
+  modal.innerHTML = `
+    <div style="background:#f8fafc; width:100%; max-width:460px; border-radius:18px; overflow:hidden; box-shadow:0 25px 60px rgba(0,0,0,0.4); border:1px solid #e2e8f0; animation:fadeIn 0.2s ease;">
+      <div style="background:linear-gradient(135deg, #dc2626, #b91c1c); color:#fff; padding:1.15rem 1.25rem; display:flex; align-items:center; gap:0.85rem;">
+        <div style="width:44px; height:44px; border-radius:12px; background:rgba(255,255,255,0.2); display:flex; align-items:center; justify-content:center; font-size:1.35rem; flex-shrink:0;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:0.74rem; text-transform:uppercase; letter-spacing:0.6px; font-weight:800; opacity:0.9;">
+            Atualização em Tempo Real do Cardápio
+          </div>
+          <h3 style="margin:0.15rem 0 0; font-size:1.05rem; font-weight:800; line-height:1.25;">
+            ${escapeHtml(titleText)}
+          </h3>
+        </div>
+      </div>
+
+      <div style="padding:1.15rem 1.25rem; max-height:62vh; overflow-y:auto; display:flex; flex-direction:column; gap:0.75rem;">
+        <p style="margin:0; font-size:0.86rem; color:#334155; line-height:1.45;">
+          Para garantir que você receba apenas produtos fresquinhos e disponíveis, atualizamos sua sacola automaticamente:
+        </p>
+        ${itemsCardsHtml}
+      </div>
+
+      <div style="padding:0.95rem 1.25rem; background:#fff; border-top:1px solid #e2e8f0; display:flex; justify-content:flex-end;">
+        <button type="button" onclick="closeRemovedItemsAlertModal()"
+          style="width:100%; padding:0.75rem 1rem; border-radius:10px; border:none; background:#0f172a; color:#fff; font-weight:800; font-size:0.92rem; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:0.5rem;">
+          <i class="fa-solid fa-check"></i> Entendi, Continuar no Cardápio
+        </button>
+      </div>
+    </div>
+  `;
+
+  modal.style.display = "flex";
+}
+
+window.purgeUnavailableCartAndModalItems = function(options = {}) {
+  const showAlert = options.showAlert !== false;
+  if (typeof VIPDatabase === "undefined") return false;
+
+  const allKits = VIPDatabase.getKits() || [];
+  const allFlavors = VIPDatabase.getFlavors() || [];
+  const allSauces = VIPDatabase.getSauces() || [];
+  const allCats = VIPDatabase.getCategories() || [];
+  const allProds = VIPDatabase.getProducts() || [];
+  const allCombos = VIPDatabase.getCombos() || [];
+
+  const removedEntries = [];
+  const keptCartItems = [];
+
+  // 1. Validar todos os itens que estão na sacola (cartItems)
+  for (const item of cartItems) {
+    if (item.type === "product") {
+      const prod = allProds.find(p => p.id === item.productId);
+      const cat = prod
+        ? allCats.find(c => c.id === prod.categoryId)
+        : (item.categoryId ? allCats.find(c => c.id === item.categoryId) : null);
+
+      if (!prod || prod.active === false) {
+        const hasOtherProdsInCat = cat && cat.active !== false && allProds.some(p => p.categoryId === cat.id && p.active !== false && p.id !== item.productId);
+        removedEntries.push({
+          itemTitle: item.name || "Produto",
+          itemTypeBadge: "🥤 Item Pausado",
+          reasonText: `O item "${item.name}" acabou de ser pausado ou esgotou no cardápio e foi retirado da sua sacola.`,
+          smartAction: hasOtherProdsInCat ? {
+            icon: "fa-eye",
+            label: `Ver Outras Opções em ${cat.name}`,
+            onClick: () => {
+              closeCheckoutDrawer();
+              const sec = document.getElementById(`cat-section-${cat.id}`);
+              if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          } : null
+        });
+        continue;
+      }
+
+      if (cat && cat.active === false) {
+        removedEntries.push({
+          itemTitle: item.name || "Produto",
+          itemTypeBadge: `🚫 ${cat.name} Pausada`,
+          reasonText: `O item "${item.name}" foi retirado da sua sacola porque a categoria "${cat.name}" foi pausada temporariamente pela loja.`,
+          smartAction: null
+        });
+        continue;
+      }
+
+      // Sincroniza preço caso tenha sido atualizado rapidamente pelo ADM
+      if (typeof prod.price === "number" && prod.price > 0 && item.price !== prod.price) {
+        item.price = prod.price;
+      }
+      keptCartItems.push(item);
+    } else if (item.type === "kit") {
+      const kit = allKits.find(k => k.id === item.kitId);
+      const cleanKitTitle = item.unitKitName || item.kitName || "Kit de Salgados";
+
+      if (!kit || kit.active === false) {
+        const hasOtherActiveKits = allKits.some(k => k.active !== false);
+        removedEntries.push({
+          itemTitle: item.kitName || cleanKitTitle,
+          itemTypeBadge: "📦 Kit Pausado",
+          reasonText: `O "${cleanKitTitle}" foi pausado temporariamente pela loja e retirado da sua sacola.`,
+          smartAction: hasOtherActiveKits ? {
+            icon: "fa-boxes-stacked",
+            label: "Ver Outros Kits Disponíveis",
+            onClick: () => {
+              closeCheckoutDrawer();
+              const sec = document.getElementById("section-kits");
+              if (sec) sec.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          } : null
+        });
+        continue;
+      }
+
+      // Verificar se algum sabor escolhido no kit foi pausado
+      const pausedFlavors = (item.flavors || []).filter(f => {
+        const dbF = allFlavors.find(x => x.id === f.id);
+        return !dbF || dbF.active === false;
+      });
+
+      // Verificar se algum molho escolhido no kit foi pausado
+      const pausedSauces = (item.sauces || []).filter(s => {
+        const dbS = allSauces.find(x => x.id === s.id);
+        return !dbS || dbS.active === false;
+      });
+
+      if (pausedFlavors.length > 0 || pausedSauces.length > 0) {
+        const mult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
+        const savedActiveFlavors = {};
+        (item.unitFlavors || item.flavors || []).forEach(f => {
+          const dbF = allFlavors.find(x => x.id === f.id);
+          if (dbF && dbF.active !== false) {
+            const unitQty = item.unitFlavors ? f.quantity : Math.max(1, Math.round((f.quantity || 1) / mult));
+            savedActiveFlavors[f.id] = unitQty;
+          }
+        });
+
+        const savedActiveSauces = {};
+        (item.unitSauces || item.sauces || []).forEach(s => {
+          const dbS = allSauces.find(x => x.id === s.id);
+          if (dbS && dbS.active !== false) {
+            const unitQty = item.unitSauces ? s.quantity : Math.max(1, Math.round((s.quantity || 1) / mult));
+            savedActiveSauces[s.id] = unitQty;
+          }
+        });
+
+        let reasonParts = [];
+        if (pausedFlavors.length > 0) {
+          const names = pausedFlavors.map(f => `"${f.name}"`).join(", ");
+          reasonParts.push(`o sabor ${names} acabou de ser pausado/esgotar`);
+        }
+        if (pausedSauces.length > 0) {
+          const sNames = pausedSauces.map(s => `"${s.name}"`).join(", ");
+          reasonParts.push(`o molho ${sNames} acabou de ser pausado/esgotar`);
+        }
+
+        removedEntries.push({
+          itemTitle: item.kitName || cleanKitTitle,
+          itemTypeBadge: pausedFlavors.length > 0 ? "🥟 Sabor Pausado" : "🥫 Molho Pausado",
+          reasonText: `O "${item.kitName || cleanKitTitle}" foi retirado da sua sacola porque ${reasonParts.join(" e ")}.`,
+          smartAction: {
+            icon: "fa-rotate",
+            label: pausedFlavors.length > 0
+              ? `Escolher Outro Sabor p/ ${kit.name}`
+              : `Remontar ${kit.name} sem o Molho Pausado`,
+            onClick: () => {
+              closeCheckoutDrawer();
+              window.openKitCustomizer(kit.id);
+              currentFlavorSelections = { ...savedActiveFlavors };
+              currentSauceSelections = { ...savedActiveSauces };
+              currentKitRepeatMultiplier = mult;
+              syncCustomizerRepeatPillsUI();
+              renderFlavorsList();
+              renderSaucesUpsell();
+              updateCustomizerProgress();
+            }
+          }
+        });
+        continue;
+      }
+
+      keptCartItems.push(item);
+    } else if (item.type === "combo") {
+      const combo = allCombos.find(c => c.id === item.comboId);
+      const cleanComboTitle = item.unitName || item.name || "Combo Promocional";
+      const subItemPauseReason = getComboSubItemPauseReason(combo);
+
+      if (!combo || combo.active === false || subItemPauseReason) {
+        removedEntries.push({
+          itemTitle: item.name || cleanComboTitle,
+          itemTypeBadge: "🔥 Combo Pausado",
+          reasonText: subItemPauseReason
+            ? `O "${cleanComboTitle}" foi retirado da sua sacola: ${subItemPauseReason}`
+            : `O "${cleanComboTitle}" foi pausado temporariamente no cardápio e retirado da sua sacola.`,
+          smartAction: null
+        });
+        continue;
+      }
+
+      const pausedFlavors = (item.flavors || []).filter(f => {
+        const dbF = allFlavors.find(x => x.id === f.id);
+        return !dbF || dbF.active === false;
+      });
+
+      const pausedSauces = (item.sauces || []).filter(s => {
+        const dbS = allSauces.find(x => x.id === s.id);
+        return !dbS || dbS.active === false;
+      });
+
+      if (pausedFlavors.length > 0 || pausedSauces.length > 0) {
+        const mult = Math.max(1, parseInt(item.repeatCount, 10) || 1);
+        const savedActiveFlavors = {};
+        (item.unitFlavors || item.flavors || []).forEach(f => {
+          const dbF = allFlavors.find(x => x.id === f.id);
+          if (dbF && dbF.active !== false) {
+            const unitQty = item.unitFlavors ? f.quantity : Math.max(1, Math.round((f.quantity || 1) / mult));
+            savedActiveFlavors[f.id] = unitQty;
+          }
+        });
+
+        const savedActiveSauces = {};
+        (item.unitSauces || item.sauces || []).forEach(s => {
+          const dbS = allSauces.find(x => x.id === s.id);
+          if (dbS && dbS.active !== false) {
+            const unitQty = item.unitSauces ? s.quantity : Math.max(1, Math.round((s.quantity || 1) / mult));
+            savedActiveSauces[s.id] = unitQty;
+          }
+        });
+
+        let reasonParts = [];
+        if (pausedFlavors.length > 0) {
+          reasonParts.push(`o sabor escolhido ${pausedFlavors.map(f => `"${f.name}"`).join(", ")} acabou de ser pausado`);
+        }
+        if (pausedSauces.length > 0) {
+          reasonParts.push(`o molho extra ${pausedSauces.map(s => `"${s.name}"`).join(", ")} acabou de ser pausado`);
+        }
+
+        removedEntries.push({
+          itemTitle: item.name || cleanComboTitle,
+          itemTypeBadge: "🔥 Sabor do Combo Pausado",
+          reasonText: `O "${item.name || cleanComboTitle}" foi retirado da sua sacola porque ${reasonParts.join(" e ")}.`,
+          smartAction: {
+            icon: "fa-rotate",
+            label: `Escolher Outro Sabor p/ ${combo.name}`,
+            onClick: () => {
+              closeCheckoutDrawer();
+              window.orderCombo(combo.id);
+              currentFlavorSelections = { ...savedActiveFlavors };
+              currentSauceSelections = { ...savedActiveSauces };
+              currentKitRepeatMultiplier = mult;
+              syncCustomizerRepeatPillsUI();
+              renderFlavorsList();
+              renderSaucesUpsell();
+              updateCustomizerProgress();
+            }
+          }
+        });
+        continue;
+      }
+
+      keptCartItems.push(item);
+    } else {
+      keptCartItems.push(item);
+    }
+  }
+
+  const cartChanged = keptCartItems.length !== cartItems.length;
+  if (cartChanged) {
+    cartItems = keptCartItems;
+    updateCartGlobalUI();
+    if (cartItems.length === 0) {
+      closeCheckoutDrawer();
+    }
+  }
+
+  // 2. Validar se o modal de montagem (#customizer-modal) está aberto no momento da pausa
+  const customizerModal = document.getElementById("customizer-modal");
+  const isCustomizerOpen = customizerModal && customizerModal.classList.contains("active") && activeCustomizingKit;
+
+  if (isCustomizerOpen) {
+    if (activeCustomizingCombo) {
+      const dbCombo = allCombos.find(c => c.id === activeCustomizingCombo.id);
+      const comboReason = getComboSubItemPauseReason(dbCombo);
+      if (!dbCombo || dbCombo.active === false || comboReason) {
+        const closedName = activeCustomizingCombo.name || "Combo Promocional";
+        closeKitCustomizer();
+        removedEntries.push({
+          itemTitle: closedName,
+          itemTypeBadge: "🔥 Combo Pausado",
+          reasonText: comboReason || `O combo "${closedName}" acabou de ser pausado pela loja enquanto você montava os sabores.`,
+          smartAction: null
+        });
+      }
+    } else if (activeCustomizingKit && !activeCustomizingKit.isCombo) {
+      const dbKit = allKits.find(k => k.id === activeCustomizingKit.id);
+      if (!dbKit || dbKit.active === false) {
+        const closedKitName = activeCustomizingKit.name || "Kit de Salgados";
+        closeKitCustomizer();
+        removedEntries.push({
+          itemTitle: closedKitName,
+          itemTypeBadge: "📦 Kit Pausado",
+          reasonText: `O "${closedKitName}" acabou de ser pausado pela loja enquanto você escolhia os sabores.`,
+          smartAction: null
+        });
+      }
+    }
+
+    // Se o modal continua aberto, verifica se algum sabor ou molho selecionado nele foi pausado
+    if (activeCustomizingKit) {
+      for (const [fId, qty] of Object.entries(currentFlavorSelections)) {
+        if (qty > 0) {
+          const dbF = allFlavors.find(x => x.id === fId);
+          if (!dbF || dbF.active === false) {
+            const fName = dbF ? dbF.name : "Sabor selecionado";
+            delete currentFlavorSelections[fId];
+            removedEntries.push({
+              itemTitle: fName,
+              itemTypeBadge: "🥟 Sabor Pausado",
+              reasonText: `O sabor "${fName}" que você estava selecionando acabou de esgotar/ser pausado e foi desmarcado. Escolha outro sabor para completar seu kit!`,
+              smartAction: null
+            });
+          }
+        }
+      }
+
+      for (const [sId, qty] of Object.entries(currentSauceSelections)) {
+        if (qty > 0) {
+          const dbS = allSauces.find(x => x.id === sId);
+          if (!dbS || dbS.active === false) {
+            const sName = dbS ? dbS.name : "Molho selecionado";
+            delete currentSauceSelections[sId];
+            removedEntries.push({
+              itemTitle: sName,
+              itemTypeBadge: "🥫 Molho Pausado",
+              reasonText: `O molho "${sName}" que você havia selecionado acabou de esgotar/ser pausado e foi desmarcado.`,
+              smartAction: null
+            });
+          }
+        }
+      }
+
+      renderFlavorsList();
+      renderSaucesUpsell();
+      updateCustomizerProgress();
+    }
+  }
+
+  if (removedEntries.length > 0 && showAlert) {
+    showRemovedCartItemsAlertModal(removedEntries);
+  }
+
+  return removedEntries.length > 0;
+};
+
+// ==============================================================================
 // INICIALIZAÇÃO
 // ==============================================================================
 document.addEventListener("DOMContentLoaded", () => {
   restoreActiveCartState();
+  window.purgeUnavailableCartAndModalItems({ showAlert: true });
   renderStoreBranding();
   checkStoreStatus();
   // Atualiza status do horário a cada 1 minuto automaticamente
@@ -3078,6 +3604,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Sincronização em Nuvem com o Supabase
   if (typeof VIPDatabase.initSupabase === "function") {
     VIPDatabase.initSupabase().then(() => {
+      window.purgeUnavailableCartAndModalItems({ showAlert: true });
       renderCustomerUI();
       renderCombos();
       renderKits();
@@ -3087,10 +3614,24 @@ document.addEventListener("DOMContentLoaded", () => {
       checkStoreStatus();
     });
   }
+
+  // Sincronização contínua em segundo plano (garante atualização mesmo em redes móveis que bloqueiam WebSocket)
+  setInterval(() => {
+    if (!document.hidden && typeof VIPDatabase !== "undefined" && typeof VIPDatabase.refreshCatalogFromSupabase === "function") {
+      VIPDatabase.refreshCatalogFromSupabase();
+    }
+  }, 12000);
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && typeof VIPDatabase !== "undefined" && typeof VIPDatabase.refreshCatalogFromSupabase === "function") {
+      VIPDatabase.refreshCatalogFromSupabase();
+    }
+  });
 });
 
 // Atualiza a tela se os dados forem sincronizados em segundo plano
 window.addEventListener("vip_supabase_synced", () => {
+  window.purgeUnavailableCartAndModalItems({ showAlert: true });
   renderCustomerUI();
   renderCombos();
   renderKits();
@@ -3109,10 +3650,12 @@ window.addEventListener("storage", (e) => {
   if (
     e.key === "salgados_vip_kits" ||
     e.key === "salgados_vip_flavors" ||
+    e.key === "salgados_vip_sauces" ||
     e.key === "salgados_vip_combos" ||
     e.key === "salgados_vip_products" ||
     e.key === "salgados_vip_categories"
   ) {
+    window.purgeUnavailableCartAndModalItems({ showAlert: true });
     renderCombos();
     renderKits();
     renderCategoryNav();
@@ -3124,6 +3667,7 @@ window.addEventListener("storage", (e) => {
 });
 
 window.addEventListener("vip_catalog_updated", () => {
+  window.purgeUnavailableCartAndModalItems({ showAlert: true });
   renderCombos();
   renderKits();
   renderCategoryNav();

@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v61.0 (Bkp 61)";
+window.VIP_APP_VERSION = "v62.0 (Bkp 62)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -1293,6 +1293,9 @@ const VIPDatabase = {
     if (Array.isArray(kits)) {
       this.saveCatalogOrder({ kits: kits.map(k => k.id) });
     }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "kits" } }));
+    }
     return this.syncKitsToSupabase(kits);
   },
 
@@ -1317,6 +1320,9 @@ const VIPDatabase = {
     }
     if (Array.isArray(flavors)) {
       this.saveCatalogOrder({ flavors: flavors.map(f => f.id) });
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "flavors" } }));
     }
     return this.syncFlavorsToSupabase(flavors);
   },
@@ -1343,6 +1349,9 @@ const VIPDatabase = {
     if (Array.isArray(sauces)) {
       this.saveCatalogOrder({ sauces: sauces.map(s => s.id) });
     }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "sauces" } }));
+    }
     return this.syncSaucesToSupabase(sauces);
   },
 
@@ -1367,6 +1376,9 @@ const VIPDatabase = {
     }
     if (Array.isArray(cats)) {
       this.saveCatalogOrder({ categories: cats.map(c => c.id) });
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "categories" } }));
     }
     return this.syncCategoriesToSupabase(cats);
   },
@@ -1393,6 +1405,9 @@ const VIPDatabase = {
     if (Array.isArray(prods)) {
       this.saveCatalogOrder({ products: prods.map(p => p.id) });
     }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "products" } }));
+    }
     return this.syncProductsToSupabase(prods);
   },
 
@@ -1417,6 +1432,9 @@ const VIPDatabase = {
     }
     if (Array.isArray(combos)) {
       this.saveCatalogOrder({ combos: combos.map(c => c.id) });
+    }
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "combos" } }));
     }
     return this.syncCombosToSupabase(combos);
   },
@@ -2853,6 +2871,116 @@ const VIPDatabase = {
     return window._vipSupabaseInitPromise;
   },
 
+  async refreshCatalogFromSupabase() {
+    const sb = getSupabaseClient();
+    if (!sb) return false;
+    try {
+      const [kitsRes, flavorsRes, saucesRes, catRes, prodsRes, combosRes, settingsRes] = await Promise.allSettled([
+        sb.from("kits").select("*"),
+        sb.from("flavors").select("*"),
+        sb.from("sauces").select("*"),
+        sb.from("categories").select("*"),
+        sb.from("products").select("*"),
+        sb.from("combos").select("*"),
+        sb.from("store_settings").select("*").in("id", ["config", "catalog_order", "marketing"])
+      ]);
+
+      let changed = false;
+      const updateIfChanged = (key, dataObj) => {
+        try {
+          const nextRaw = JSON.stringify(dataObj);
+          const prevRaw = localStorage.getItem(key);
+          if (nextRaw !== prevRaw) {
+            localStorage.setItem(key, nextRaw);
+            changed = true;
+          }
+        } catch (e) {}
+      };
+
+      if (settingsRes.status === "fulfilled" && Array.isArray(settingsRes.value.data)) {
+        settingsRes.value.data.forEach(row => {
+          if (row.id === "config" && row.value) updateIfChanged(STORAGE_KEYS.CONFIG, row.value);
+          if (row.id === "catalog_order" && row.value) updateIfChanged(STORAGE_KEYS.CATALOG_ORDER, row.value);
+          if (row.id === "marketing" && row.value) updateIfChanged(STORAGE_KEYS.MARKETING, row.value);
+        });
+      }
+
+      const activeCatalogOrder = this.getCatalogOrder();
+
+      if (kitsRes.status === "fulfilled" && Array.isArray(kitsRes.value.data) && kitsRes.value.data.length > 0) {
+        let mappedKits = kitsRes.value.data.map(k => ({
+          ...k,
+          passo_quantidade: k.passo_quantidade || 10,
+          active: k.active !== false,
+          image: (k.image && k.image.trim()) ? k.image : (DEFAULT_KITS.find(d => d.id === k.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.kit)
+        }));
+        mappedKits = applyCatalogOrder(mappedKits, activeCatalogOrder.kits);
+        updateIfChanged(STORAGE_KEYS.KITS, mappedKits);
+      }
+
+      if (flavorsRes.status === "fulfilled" && Array.isArray(flavorsRes.value.data) && flavorsRes.value.data.length > 0) {
+        let mappedFlavors = flavorsRes.value.data.map(f => ({
+          ...f,
+          active: f.active !== false,
+          image: (f.image && f.image.trim()) ? f.image : (DEFAULT_FLAVORS.find(d => d.id === f.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.flavor)
+        }));
+        mappedFlavors = applyCatalogOrder(mappedFlavors, activeCatalogOrder.flavors);
+        updateIfChanged(STORAGE_KEYS.FLAVORS, mappedFlavors);
+      }
+
+      if (saucesRes.status === "fulfilled" && Array.isArray(saucesRes.value.data) && saucesRes.value.data.length > 0) {
+        let mappedSauces = saucesRes.value.data.map(s => ({
+          ...s,
+          active: s.active !== false,
+          image: (s.image && s.image.trim()) ? s.image : (DEFAULT_SAUCES.find(d => d.id === s.id)?.image || (s.id === "sem-molho" ? "" : DEFAULT_IMAGE_PLACEHOLDERS.sauce))
+        }));
+        mappedSauces = applyCatalogOrder(mappedSauces, activeCatalogOrder.sauces);
+        updateIfChanged(STORAGE_KEYS.SAUCES, mappedSauces);
+      }
+
+      if (catRes.status === "fulfilled" && Array.isArray(catRes.value.data) && catRes.value.data.length > 0) {
+        let mappedCats = catRes.value.data.map(c => ({
+          ...c,
+          active: c.active !== false
+        }));
+        mappedCats = applyCatalogOrder(mappedCats, activeCatalogOrder.categories);
+        updateIfChanged(STORAGE_KEYS.CATEGORIES, mappedCats);
+      }
+
+      if (prodsRes.status === "fulfilled" && Array.isArray(prodsRes.value.data) && prodsRes.value.data.length > 0) {
+        let mappedProds = prodsRes.value.data.map(p => ({
+          ...p,
+          categoryId: p.category_id || p.categoryId,
+          active: p.active !== false,
+          image: (p.image && p.image.trim()) ? p.image : (DEFAULT_PRODUCTS.find(d => d.id === p.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.product)
+        }));
+        mappedProds = applyCatalogOrder(mappedProds, activeCatalogOrder.products);
+        updateIfChanged(STORAGE_KEYS.PRODUCTS, mappedProds);
+      }
+
+      if (combosRes.status === "fulfilled" && Array.isArray(combosRes.value.data) && combosRes.value.data.length > 0) {
+        let mappedCombos = combosRes.value.data.map(c => ({
+          ...c,
+          regularPrice: parseFloat(c.regular_price || c.regularPrice || 0),
+          price: parseFloat(c.price || 0),
+          discountPercent: parseFloat(c.discount_percent || c.discountPercent || 0),
+          active: c.active !== false,
+          image: (c.image && c.image.trim()) ? c.image : (DEFAULT_COMBOS.find(d => d.id === c.id)?.image || DEFAULT_IMAGE_PLACEHOLDERS.combo)
+        }));
+        mappedCombos = applyCatalogOrder(mappedCombos, activeCatalogOrder.combos);
+        updateIfChanged(STORAGE_KEYS.COMBOS, mappedCombos);
+      }
+
+      if (changed) {
+        window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "all_sync" } }));
+      }
+      return changed;
+    } catch (err) {
+      console.warn("[Supabase] Falha ao atualizar catálogo em tempo real:", err);
+      return false;
+    }
+  },
+
   subscribeRealtimeOrders() {
     const sb = getSupabaseClient();
     if (!sb || _supabaseChannel) return;
@@ -2867,6 +2995,21 @@ const VIPDatabase = {
         })
         .on("postgres_changes", { event: "*", schema: "public", table: "categories" }, (payload) => {
           this.handleRealtimeCatalogPayload("categories", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "kits" }, (payload) => {
+          this.handleRealtimeCatalogPayload("kits", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "flavors" }, (payload) => {
+          this.handleRealtimeCatalogPayload("flavors", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "sauces" }, (payload) => {
+          this.handleRealtimeCatalogPayload("sauces", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "combos" }, (payload) => {
+          this.handleRealtimeCatalogPayload("combos", payload);
+        })
+        .on("postgres_changes", { event: "*", schema: "public", table: "store_settings" }, (payload) => {
+          this.handleRealtimeCatalogPayload("store_settings", payload);
         })
         .subscribe((status) => {
           console.log("[Supabase Realtime] Status do canal:", status);
@@ -2912,6 +3055,86 @@ const VIPDatabase = {
       }
       try { localStorage.setItem(STORAGE_KEYS.CATEGORIES, JSON.stringify(cats)); } catch (e) {}
       window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "categories" } }));
+    } else if (table === "kits") {
+      let kits = this.getKits();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          quantity: parseInt(rowNew.quantity, 10) || 30,
+          price: parseFloat(rowNew.price || 0),
+          passo_quantidade: parseInt(rowNew.passo_quantidade, 10) || 10,
+          active: rowNew.active !== false
+        };
+        const idx = kits.findIndex(k => k.id === mapped.id);
+        if (idx !== -1) kits[idx] = { ...kits[idx], ...mapped };
+        else kits.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        kits = kits.filter(k => k.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.KITS, JSON.stringify(kits)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "kits" } }));
+    } else if (table === "flavors") {
+      let flavors = this.getFlavors();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          adicional_por_10: rowNew.adicional_por_10 !== null && rowNew.adicional_por_10 !== undefined ? parseFloat(rowNew.adicional_por_10) : null,
+          limite_quantidade: rowNew.limite_quantidade !== null && rowNew.limite_quantidade !== undefined ? parseInt(rowNew.limite_quantidade, 10) : null,
+          active: rowNew.active !== false
+        };
+        const idx = flavors.findIndex(f => f.id === mapped.id);
+        if (idx !== -1) flavors[idx] = { ...flavors[idx], ...mapped };
+        else flavors.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        flavors = flavors.filter(f => f.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.FLAVORS, JSON.stringify(flavors)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "flavors" } }));
+    } else if (table === "sauces") {
+      let sauces = this.getSauces();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          price: parseFloat(rowNew.price || 0),
+          active: rowNew.active !== false
+        };
+        const idx = sauces.findIndex(s => s.id === mapped.id);
+        if (idx !== -1) sauces[idx] = { ...sauces[idx], ...mapped };
+        else sauces.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        sauces = sauces.filter(s => s.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.SAUCES, JSON.stringify(sauces)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "sauces" } }));
+    } else if (table === "combos") {
+      let combos = this.getCombos();
+      if (eventType === "INSERT" || eventType === "UPDATE") {
+        const mapped = {
+          ...rowNew,
+          regularPrice: parseFloat(rowNew.regular_price ?? rowNew.regularPrice ?? 0),
+          price: parseFloat(rowNew.price || 0),
+          discountPercent: parseFloat(rowNew.discount_percent ?? rowNew.discountPercent ?? 0),
+          active: rowNew.active !== false
+        };
+        const idx = combos.findIndex(c => c.id === mapped.id);
+        if (idx !== -1) combos[idx] = { ...combos[idx], ...mapped };
+        else combos.push(mapped);
+      } else if (eventType === "DELETE" && rowOld && rowOld.id) {
+        combos = combos.filter(c => c.id !== rowOld.id);
+      }
+      try { localStorage.setItem(STORAGE_KEYS.COMBOS, JSON.stringify(combos)); } catch (e) {}
+      window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "combos" } }));
+    } else if (table === "store_settings") {
+      if (rowNew && rowNew.id === "config" && rowNew.value) {
+        try { localStorage.setItem(STORAGE_KEYS.CONFIG, JSON.stringify(rowNew.value)); } catch (e) {}
+        window.dispatchEvent(new CustomEvent("vip_supabase_synced", { detail: { table: "config" } }));
+      } else if (rowNew && rowNew.id === "catalog_order" && rowNew.value) {
+        try { localStorage.setItem(STORAGE_KEYS.CATALOG_ORDER, JSON.stringify(rowNew.value)); } catch (e) {}
+        this.refreshCatalogFromSupabase();
+      } else if (rowNew && rowNew.id === "marketing" && rowNew.value) {
+        try { localStorage.setItem(STORAGE_KEYS.MARKETING, JSON.stringify(rowNew.value)); } catch (e) {}
+        window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "marketing" } }));
+      }
     }
   },
 

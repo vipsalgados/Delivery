@@ -4848,6 +4848,10 @@ function renderCombosTable() {
   const tbody = document.getElementById("combos-table-body");
   if (!tbody) return;
   const combos = VIPDatabase.getCombos();
+  const allKits = VIPDatabase.getKits();
+  const allProds = VIPDatabase.getProducts();
+  const allCats = VIPDatabase.getCategories();
+  const allSauces = VIPDatabase.getSauces();
   tbody.innerHTML = "";
 
   if (combos.length === 0) {
@@ -4864,13 +4868,35 @@ function renderCombosTable() {
       ? `<span class="badge-step-item" style="background:#fee2e2; border-color:#fca5a5; color:#b91c1c;"><i class="fa-solid fa-fire"></i> ${combo.badge}</span>`
       : `<span style="color:#94a3b8;">Padrão</span>`;
 
-    // Itens inclusos
+    // Itens inclusos + verificação de sub-item pausado
+    let pausedSubItemNames = [];
     let itemsSummary = (combo.items || []).map(i => {
       let icon = "fa-tag";
-      if (i.type === "kit") icon = "fa-boxes-stacked";
-      else if (i.type === "product") icon = "fa-bottle-water";
-      else if (i.type === "sauce") icon = "fa-bowl-food";
-      return `<div style="font-size:0.83rem; line-height:1.4;"><i class="fa-solid ${icon}" style="color:#d97706; width:14px;"></i> ${i.quantity}x ${i.name}</div>`;
+      let isSubPaused = false;
+      if (i.type === "kit") {
+        icon = "fa-boxes-stacked";
+        const k = allKits.find(x => x.id === i.id);
+        if (k && k.active === false) isSubPaused = true;
+      } else if (i.type === "product") {
+        icon = "fa-bottle-water";
+        const p = allProds.find(x => x.id === i.id);
+        if (p) {
+          if (p.active === false) isSubPaused = true;
+          else if (p.categoryId) {
+            const c = allCats.find(cat => cat.id === p.categoryId);
+            if (c && c.active === false) isSubPaused = true;
+          }
+        }
+      } else if (i.type === "sauce") {
+        icon = "fa-bowl-food";
+        const s = allSauces.find(x => x.id === i.id);
+        if (s && s.active === false) isSubPaused = true;
+      }
+      if (isSubPaused) pausedSubItemNames.push(i.name);
+      const subBadge = isSubPaused
+        ? ` <span style="background:#fee2e2; color:#dc2626; font-size:0.7rem; font-weight:800; padding:1px 5px; border-radius:4px;">PAUSADO</span>`
+        : "";
+      return `<div style="font-size:0.83rem; line-height:1.4; ${isSubPaused ? 'color:#dc2626; font-weight:700;' : ''}"><i class="fa-solid ${icon}" style="color:${isSubPaused ? '#dc2626' : '#d97706'}; width:14px;"></i> ${i.quantity}x ${i.name}${subBadge}</div>`;
     }).join("");
 
     if (!itemsSummary) itemsSummary = `<span style="color:#94a3b8;">Sem itens configurados</span>`;
@@ -4884,9 +4910,14 @@ function renderCombosTable() {
       ? `<div style="color:#059669; font-weight:800; font-size:0.88rem;">Economiza ${formatBRL(savings)}</div><div style="font-size:0.78rem; color:#10b981; font-weight:700;">(${pct}% OFF)</div>`
       : `<span style="color:#94a3b8;">Sem desconto</span>`;
 
-    const statusBadge = combo.active !== false
-      ? `<span class="badge-status-item active"><i class="fa-solid fa-circle-check"></i> Ativo</span>`
-      : `<span class="badge-status-item inactive"><i class="fa-solid fa-circle-xmark"></i> Pausado</span>`;
+    let statusBadge = "";
+    if (combo.active === false) {
+      statusBadge = `<span class="badge-status-item inactive"><i class="fa-solid fa-circle-xmark"></i> Pausado</span>`;
+    } else if (pausedSubItemNames.length > 0) {
+      statusBadge = `<span class="badge-status-item inactive" style="background:#fef3c7; color:#b45309; border:1px solid #fde68a;" title="Oculto automaticamente no cardápio porque o item incluso (${pausedSubItemNames.join(', ')}) está pausado"><i class="fa-solid fa-triangle-exclamation"></i> Pausado (Item Esgotado)</span>`;
+    } else {
+      statusBadge = `<span class="badge-status-item active"><i class="fa-solid fa-circle-check"></i> Ativo</span>`;
+    }
 
     const comboThumb = combo.image || (window.DEFAULT_IMAGE_PLACEHOLDERS && window.DEFAULT_IMAGE_PLACEHOLDERS.combo) || "";
 
@@ -11161,4 +11192,10 @@ document.addEventListener("DOMContentLoaded", () => {
       checkWhatsAppSilentServiceStatus(false);
     }
   }, 1200);
+
+  window.addEventListener("vip_catalog_updated", () => {
+    if (typeof renderCombosTable === "function") {
+      renderCombosTable();
+    }
+  });
 });
