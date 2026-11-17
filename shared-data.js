@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v62.0 (Bkp 62)";
+window.VIP_APP_VERSION = "v63.0 (Bkp 63)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -263,6 +263,7 @@ const DEFAULT_PRINTER_CONFIG = {
   paperWidth: "80mm", // "80mm" (padrão balcão) ou "58mm"
   copies: 1, // 1 ou 2 vias
   soundAlert: true,
+  soundTone: "chime", // "chime" (Campainha Ding-Dong), "beep" (Alerta Cozinha PDV), "melody" (Sino Triplo VIP)
   autoCutPaper: true, // Avanço de papel e linha de corte
   targetPrepTimeMinutes: 35,
 

@@ -44,12 +44,15 @@
       iframe = document.createElement("iframe");
       iframe.id = "vip-printer-iframe";
       iframe.style.position = "fixed";
-      iframe.style.right = "-9999px";
-      iframe.style.bottom = "-9999px";
-      iframe.style.width = "1px";
-      iframe.style.height = "1px";
+      iframe.style.left = "0";
+      iframe.style.top = "0";
+      iframe.style.width = "100%";
+      iframe.style.height = "100%";
+      iframe.style.zIndex = "-99999";
+      iframe.style.opacity = "0.001";
+      iframe.style.pointerEvents = "none";
       iframe.style.border = "0";
-      iframe.style.visibility = "hidden";
+      iframe.style.visibility = "visible";
       document.body.appendChild(iframe);
     }
     return iframe;
@@ -1265,10 +1268,10 @@
           iframe.contentWindow.focus();
           iframe.contentWindow.print();
         } catch (pErr) {
-          console.error("[VIPThermalPrinter] Erro no iframe print:", pErr);
+          console.warn("[VIPThermalPrinter] Erro no iframe.print(), acionando fallback window.print():", pErr);
           try { window.print(); } catch (e) {}
         }
-      }, 150);
+      }, 250);
     },
 
     // Finalização e gravação de status impresso

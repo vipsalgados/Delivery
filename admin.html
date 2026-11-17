@@ -19,9 +19,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=62.0">
-  <link rel="stylesheet" href="pwa.css?v=62.0">
-  <link rel="stylesheet" href="vip-marketing.css?v=62.0">
+  <link rel="stylesheet" href="admin.css?v=63.0">
+  <link rel="stylesheet" href="pwa.css?v=63.0">
+  <link rel="stylesheet" href="vip-marketing.css?v=63.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- Leaflet.js para Mapa Interativo de Entregas -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -1800,6 +1800,25 @@
                       </div>
                     </div>
 
+                    <div class="form-row" id="cfg-printer-sound-options-row" style="margin-top: 0.6rem; background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; align-items: flex-end; gap: 12px;">
+                      <div class="form-group" style="flex: 2; margin-bottom: 0;">
+                        <label for="cfg-printer-sound-tone" style="font-weight: 600; color: #1e293b; display: flex; align-items: center; gap: 6px; font-size: 0.88rem;">
+                          <i class="fa-solid fa-volume-high" style="color: #2563eb;"></i> Som do Alerta de Novos Pedidos (3 Opções)
+                        </label>
+                        <select id="cfg-printer-sound-tone" onchange="testOrderSound()" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #cbd5e1; font-weight: 500; font-size: 0.88rem; background: #ffffff;">
+                          <option value="chime">🔔 Opção 1: Campainha Harmônica (Ding-Dong Suave)</option>
+                          <option value="beep">⚡ Opção 2: Alerta de Cozinha (Beep Duplo Rápido - Alto Impacto)</option>
+                          <option value="melody">🎵 Opção 3: Sino Triplo Alegre (Acorde VIP Ascendente)</option>
+                        </select>
+                        <small class="form-help">Escolha o tom sonoro ideal para avisar sua equipe na cozinha ou balcão.</small>
+                      </div>
+                      <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-test-sound" onclick="testOrderSound()" style="height: 38px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 600;">
+                          <i class="fa-solid fa-play"></i> Ouvir / Testar Som
+                        </button>
+                      </div>
+                    </div>
+
                     <!-- 2. Dispositivo e Bobina -->
                     <div class="form-row" style="margin-top: 1rem;">
                       <div class="form-group" style="flex: 1.5;">
@@ -2208,7 +2227,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 7px;">
           <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%;" title="Sistema Online e Operante"></span>
-          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">v62.0 (Bkp 62)</span>
+          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">v63.0 (Bkp 63)</span>
         </div>
       </footer>
 
@@ -3449,12 +3468,12 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=62.0"></script>
-  <script src="vip-whatsapp.js?v=62.0"></script>
-  <script src="vip-live-orders.js?v=62.0"></script>
-  <script src="vip-web-printer.js?v=62.0"></script>
-  <script src="admin.js?v=62.0"></script>
-  <script src="vip-marketing.js?v=62.0"></script>
-  <script src="pwa.js?v=62.0"></script>
+  <script src="shared-data.js?v=63.0"></script>
+  <script src="vip-whatsapp.js?v=63.0"></script>
+  <script src="vip-live-orders.js?v=63.0"></script>
+  <script src="vip-web-printer.js?v=63.0"></script>
+  <script src="admin.js?v=63.0"></script>
+  <script src="vip-marketing.js?v=63.0"></script>
+  <script src="pwa.js?v=63.0"></script>
 </body>
 </html>

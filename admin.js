@@ -568,18 +568,22 @@ function initOrdersWatcher() {
   if (window._adminWatcherInitialized) return;
   window._adminWatcherInitialized = true;
 
-  // Marca os pedidos já existentes localmente para evitar falsos alarmes de impressão
+  // Marca os pedidos já existentes localmente para evitar falsos alarmes de impressão de pedidos antigos
   const orders = VIPDatabase.getOrders();
-  orders.forEach(o => knownOrderIds.add(o.id));
+  const now = Date.now();
+  orders.forEach(o => {
+    // Pedidos já impressos, ou com mais de 20 minutos, ou cujo status não é 'novo' são marcados como conhecidos
+    if (o.printed || o.printedAt || (now - (o.createdAt || 0) > 20 * 60 * 1000) || o.status !== "novo") {
+      knownOrderIds.add(o.id);
+    }
+  });
 
   // Inicializa o Supabase (Nuvem em Tempo Real com carregamento paralelo rápido)
   if (typeof VIPDatabase.initSupabase === "function") {
     VIPDatabase.initSupabase().then(success => {
       window._vipInitialOrdersLoaded = true;
-      // Registra todos os pedidos carregados da nuvem como já conhecidos antes de checar alertas
-      const curOrders = VIPDatabase.getOrders();
-      curOrders.forEach(o => knownOrderIds.add(o.id));
       updateSupabasePillStatus(success ? "SUBSCRIBED" : "OFFLINE");
+      checkIncomingLiveOrders();
       debouncedRenderLiveOrders();
     });
   }
@@ -643,8 +647,7 @@ function initOrdersWatcher() {
     });
 
     window.addEventListener("vip_orders_updated", () => {
-      const curOrders = VIPDatabase.getOrders();
-      curOrders.forEach(o => knownOrderIds.add(o.id));
+      checkIncomingLiveOrders();
       debouncedRenderLiveOrders();
     });
 
@@ -656,8 +659,7 @@ function initOrdersWatcher() {
 
     window.addEventListener("vip_supabase_synced", () => {
       window._vipInitialOrdersLoaded = true;
-      const curOrders = VIPDatabase.getOrders();
-      curOrders.forEach(o => knownOrderIds.add(o.id));
+      checkIncomingLiveOrders();
       debouncedRenderLiveOrders();
       renderFlavorsTable();
       renderKitsTable();
@@ -742,67 +744,198 @@ function handleOrdersStorageEvent(e) {
   }
 }
 
-// Emite aviso sonoro (Web Audio API - sem necessidade de arquivos externos)
-function playNewOrderChime() {
-  const cfg = VIPDatabase.getPrinterConfig();
-  if (!cfg.soundAlert) return;
-
+// ==============================================================================
+// SISTEMA DE ÁUDIO & NOTIFICAÇÕES SONORAS (WEB AUDIO API - ZERO ARQUIVOS EXTERNOS)
+// ==============================================================================
+let _globalAudioCtx = null;
+function getAudioContext() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
+    if (!AudioCtx) return null;
+    if (!_globalAudioCtx || _globalAudioCtx.state === "closed") {
+      _globalAudioCtx = new AudioCtx();
+    }
+    if (_globalAudioCtx.state === "suspended") {
+      _globalAudioCtx.resume().catch(() => {});
+    }
+    return _globalAudioCtx;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Desbloqueia automaticamente o contexto de áudio na primeira interação do operador na tela
+function setupAudioUnlock() {
+  const unlock = () => {
+    try {
+      const ctx = getAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume().catch(() => {});
+      }
+    } catch(e) {}
+    window.removeEventListener("click", unlock);
+    window.removeEventListener("keydown", unlock);
+    window.removeEventListener("touchstart", unlock);
+  };
+  window.addEventListener("click", unlock, { once: true, passive: true });
+  window.addEventListener("keydown", unlock, { once: true, passive: true });
+  window.addEventListener("touchstart", unlock, { once: true, passive: true });
+}
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupAudioUnlock);
+} else {
+  setupAudioUnlock();
+}
+
+// Emite aviso sonoro conforme a opção configurada pelo usuário (3 opções de sons)
+function playNewOrderAlertSound(toneType = null, isTest = false) {
+  const cfg = VIPDatabase.getPrinterConfig();
+  if (!isTest && cfg.soundAlert === false) return;
+
+  const tone = toneType || cfg.soundTone || "chime";
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    if (ctx.state === "suspended") {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx.currentTime;
 
-    // Nota 1 (Ré5 - 587.33Hz)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(587.33, now);
-    gain1.gain.setValueAtTime(0.25, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.3);
+    if (tone === "beep") {
+      // OPÇÃO 2: Alerta de Cozinha (Beep Duplo Rápido / PDV Comercial - Alta Penetração Sonora)
+      // Beep 1 (Si5 - 987.77Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(987.77, now);
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.linearRampToValueAtTime(0.40, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.14);
 
-    // Nota 2 (Lá5 - 880.00Hz)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "sine";
-    osc2.frequency.setValueAtTime(880.00, now + 0.16);
-    gain2.gain.setValueAtTime(0.35, now + 0.16);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.16);
-    osc2.stop(now + 0.6);
+      // Beep 2 (Mi6 - 1318.51Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1318.51, now + 0.16);
+      gain2.gain.setValueAtTime(0.001, now + 0.16);
+      gain2.gain.linearRampToValueAtTime(0.50, now + 0.18);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.16);
+      osc2.stop(now + 0.32);
+
+      // Beep 3 curto final (Sol6 - 1567.98Hz)
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = "sine";
+      osc3.frequency.setValueAtTime(1567.98, now + 0.34);
+      gain3.gain.setValueAtTime(0.001, now + 0.34);
+      gain3.gain.linearRampToValueAtTime(0.55, now + 0.36);
+      gain3.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now + 0.34);
+      osc3.stop(now + 0.55);
+
+    } else if (tone === "melody") {
+      // OPÇÃO 3: Sino Triplo Alegre (Acorde VIP Ascendente C5 -> E5 -> G5 -> C6)
+      const notes = [
+        { freq: 523.25, start: 0.00, dur: 0.22, vol: 0.30 }, // C5
+        { freq: 659.25, start: 0.13, dur: 0.22, vol: 0.35 }, // E5
+        { freq: 783.99, start: 0.26, dur: 0.24, vol: 0.40 }, // G5
+        { freq: 1046.50, start: 0.39, dur: 0.52, vol: 0.45 } // C6
+      ];
+
+      notes.forEach(n => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(n.freq, now + n.start);
+        gain.gain.setValueAtTime(0.001, now + n.start);
+        gain.gain.linearRampToValueAtTime(n.vol, now + n.start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + n.start + n.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + n.start);
+        osc.stop(now + n.start + n.dur);
+      });
+
+    } else {
+      // OPÇÃO 1: Campainha Harmônica (Ding-Dong Suave - Padrão)
+      // Nota 1 (Ré5 - 587.33Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(587.33, now);
+      gain1.gain.setValueAtTime(0.001, now);
+      gain1.gain.linearRampToValueAtTime(0.35, now + 0.02);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Nota 2 (Lá5 - 880.00Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(880.00, now + 0.18);
+      gain2.gain.setValueAtTime(0.001, now + 0.18);
+      gain2.gain.linearRampToValueAtTime(0.45, now + 0.20);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.70);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.18);
+      osc2.stop(now + 0.70);
+    }
   } catch (err) {
     console.warn("Áudio de notificação bloqueado pelo navegador:", err);
   }
 }
 
+// Botão para testar/ouvir o som selecionado diretamente no painel
+window.testOrderSound = function() {
+  const toneSelect = document.getElementById("cfg-printer-sound-tone");
+  const tone = toneSelect ? toneSelect.value : "chime";
+  playNewOrderAlertSound(tone, true);
+};
+
+// Retrocompatibilidade total para chamadas legadas
+function playNewOrderChime(toneOverride = null) {
+  playNewOrderAlertSound(toneOverride, false);
+}
+window.playNewOrderChime = playNewOrderChime;
+
 // Fila inteligente de auto-impressão para garantir que pedidos em lote sejam todos impressos ordenadamente
 let printQueue = [];
 let isProcessingPrintQueue = false;
 
-function processPrintQueue() {
+async function processPrintQueue() {
   if (isProcessingPrintQueue || printQueue.length === 0) return;
   isProcessingPrintQueue = true;
   const nextOrderId = printQueue.shift();
 
   try {
-    printOrderReceipt(nextOrderId, true);
+    if (typeof printOrderReceipt === "function") {
+      await printOrderReceipt(nextOrderId, true);
+    }
   } catch (err) {
     console.error("Erro na impressão do pedido da fila:", err);
+  } finally {
+    // Intervalo suave de 1200ms para a impressora física processar cada via
+    setTimeout(() => {
+      isProcessingPrintQueue = false;
+      if (printQueue.length > 0) {
+        processPrintQueue();
+      }
+    }, 1200);
   }
-
-  // Intervalo suave de 1400ms para a impressora física processar cada via
-  setTimeout(() => {
-    isProcessingPrintQueue = false;
-    if (printQueue.length > 0) {
-      processPrintQueue();
-    }
-  }, 1400);
 }
 
 function enqueueAutoPrint(orderId) {
@@ -823,7 +956,7 @@ function checkIncomingLiveOrders() {
     if (!knownOrderIds.has(order.id)) {
       knownOrderIds.add(order.id);
       hasNew = true;
-      if (order.status === "novo" && !order.printedAt && printerCfg.autoPrintNewOrders !== false) {
+      if (order.status === "novo" && !order.printed && !order.printedAt && printerCfg.autoPrintNewOrders !== false) {
         ordersToAutoPrint.push(order);
       }
     }
@@ -831,7 +964,7 @@ function checkIncomingLiveOrders() {
 
   if (hasNew) {
     if (printerCfg.soundAlert !== false) {
-      playNewOrderChime();
+      playNewOrderAlertSound(printerCfg.soundTone || "chime");
     }
     renderLiveOrders();
 
@@ -6241,6 +6374,7 @@ function populatePrinterSettings(force = false) {
   const autoPrintEl = document.getElementById("cfg-printer-autoprint");
   const silentEl = document.getElementById("cfg-printer-silent");
   const soundEl = document.getElementById("cfg-printer-sound");
+  const soundToneEl = document.getElementById("cfg-printer-sound-tone");
   const autoCutEl = document.getElementById("cfg-printer-autocut");
   const targetEl = document.getElementById("cfg-printer-target");
   const paperEl = document.getElementById("cfg-printer-paper");
@@ -6263,6 +6397,7 @@ function populatePrinterSettings(force = false) {
   if (autoPrintEl && (force || document.activeElement !== autoPrintEl)) autoPrintEl.checked = pCfg.autoPrintNewOrders !== false;
   if (silentEl && (force || document.activeElement !== silentEl)) silentEl.checked = pCfg.silentPrintMode !== false;
   if (soundEl && (force || document.activeElement !== soundEl)) soundEl.checked = pCfg.soundAlert !== false;
+  if (soundToneEl && (force || document.activeElement !== soundToneEl)) soundToneEl.value = pCfg.soundTone || "chime";
   if (autoCutEl && (force || document.activeElement !== autoCutEl)) autoCutEl.checked = pCfg.autoCutPaper !== false;
   const activeTarget = (window.VIPWebPrinter ? window.VIPWebPrinter.getLocalTarget() : (pCfg.printerTarget || "windows_default"));
   if (targetEl && (force || document.activeElement !== targetEl)) targetEl.value = activeTarget;
@@ -6519,6 +6654,7 @@ if (btnSavePrinter) {
       autoPrintNewOrders: document.getElementById("cfg-printer-autoprint") ? document.getElementById("cfg-printer-autoprint").checked : true,
       silentPrintMode: document.getElementById("cfg-printer-silent") ? document.getElementById("cfg-printer-silent").checked : true,
       soundAlert: document.getElementById("cfg-printer-sound") ? document.getElementById("cfg-printer-sound").checked : true,
+      soundTone: document.getElementById("cfg-printer-sound-tone") ? document.getElementById("cfg-printer-sound-tone").value : "chime",
       autoCutPaper: document.getElementById("cfg-printer-autocut") ? document.getElementById("cfg-printer-autocut").checked : true,
       printerTarget: document.getElementById("cfg-printer-target") ? document.getElementById("cfg-printer-target").value : "windows_default",
       paperWidth: document.getElementById("cfg-printer-paper") ? document.getElementById("cfg-printer-paper").value : "80mm",
