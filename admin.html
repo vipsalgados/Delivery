@@ -863,6 +863,9 @@
           <button type="button" class="motoboy-tab-btn" id="btn-subtab-mb-crm" onclick="switchMotoboySubTab('crm')">
             <i class="fa-solid fa-chart-pie"></i> 📊 Controle de Gastos por Período (CRM)
           </button>
+          <button type="button" class="motoboy-tab-btn" id="btn-subtab-mb-radar" onclick="switchMotoboySubTab('radar')">
+            <i class="fa-solid fa-satellite-dish"></i> 🗺️ Radar GPS em Tempo Real
+          </button>
         </div>
 
         <!-- ================= SUB-ABA 1: FROTA & ESCALA SEMANAL ================= -->
@@ -1120,6 +1123,42 @@
                   <!-- Renderizado via JS -->
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= SUB-ABA 3: RADAR GPS DA FROTA EM TEMPO REAL ================= -->
+        <div id="subtab-pane-motoboys-radar" class="motoboy-subtab-pane" style="display: none;">
+          <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem; margin-bottom: 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+              <div>
+                <h3 style="margin: 0 0 4px 0; font-size: 1.15rem; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                  <i class="fa-solid fa-satellite-dish" style="color: #0284c7;"></i> Radar da Frota em Tempo Real
+                  <span class="badge" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 0.76rem; padding: 3px 8px; border-radius: 20px;"><i class="fa-solid fa-circle fa-fade" style="font-size: 0.55rem; color: #10b981;"></i> Ao Vivo</span>
+                </h3>
+                <span style="font-size: 0.85rem; color: #64748b;">Acompanhe a posição GPS de cada motoboy nas ruas de Nova Iguaçu e entre em contato direto pelo WhatsApp.</span>
+              </div>
+              <button type="button" class="btn-outline-admin" onclick="refreshFleetRadarUI()">
+                <i class="fa-solid fa-arrows-rotate"></i> Atualizar Posições
+              </button>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 360px 1fr; gap: 1.25rem; align-items: start;">
+            <!-- Lista lateral de motoboys ativos com botão WhatsApp -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); max-height: 560px; overflow-y: auto;">
+              <h4 style="font-size: 0.95rem; font-weight: 700; color: #0f172a; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between;">
+                <span><i class="fa-solid fa-motorcycle" style="color: #d97706;"></i> Entregadores Conectados</span>
+                <span class="badge" id="radar-motoboy-count-badge" style="background: #f1f5f9; color: #334155;">0</span>
+              </h4>
+              <div id="radar-motoboys-sidebar-list" style="display: flex; flex-direction: column; gap: 10px;">
+                <!-- Cards renderizados via JS -->
+              </div>
+            </div>
+
+            <!-- Mapa Leaflet da Frota -->
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+              <div id="admin-fleet-radar-map" style="width: 100%; height: 535px; border-radius: 8px;"></div>
             </div>
           </div>
         </div>
@@ -3471,13 +3510,14 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=64.0"></script>
-  <script src="vip-delivery-men.js?v=64.0"></script>
-  <script src="vip-whatsapp.js?v=64.0"></script>
-  <script src="vip-live-orders.js?v=64.0"></script>
-  <script src="vip-web-printer.js?v=64.0"></script>
-  <script src="admin.js?v=64.0"></script>
-  <script src="vip-marketing.js?v=64.0"></script>
-  <script src="pwa.js?v=64.0"></script>
+  <script src="shared-data.js?v=65.0"></script>
+  <script src="vip-delivery-men.js?v=65.0"></script>
+  <script src="vip-motoboy-tracker.js?v=65.0"></script>
+  <script src="vip-whatsapp.js?v=65.0"></script>
+  <script src="vip-live-orders.js?v=65.0"></script>
+  <script src="vip-web-printer.js?v=65.0"></script>
+  <script src="admin.js?v=65.0"></script>
+  <script src="vip-marketing.js?v=65.0"></script>
+  <script src="pwa.js?v=65.0"></script>
 </body>
 </html>

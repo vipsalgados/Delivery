@@ -20,10 +20,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=64.0">
-  <link rel="stylesheet" href="pwa.css?v=64.0">
-  <link rel="stylesheet" href="vip-marketing.css?v=64.0">
+  <link rel="stylesheet" href="style.css?v=65.0">
+  <link rel="stylesheet" href="pwa.css?v=65.0">
+  <link rel="stylesheet" href="vip-marketing.css?v=65.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Leaflet.js para Radar do Pedido em Tempo Real -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
 
@@ -553,17 +557,106 @@
     </div>
   </div>
 
+  <!-- BOTÃO FLUTUANTE DE RETORNO RÁPIDO AO RASTREAMENTO DO PEDIDO EM ANDAMENTO -->
+  <button type="button" class="floating-track-order-btn" id="floating-track-order-btn" style="display: none;" onclick="VIPCustomerTracker.openTrackingModal()" title="Acompanhar seu pedido em tempo real">
+    <span class="track-pulse-dot"></span>
+    <i class="fa-solid fa-motorcycle fa-bounce" style="font-size: 1.15rem; color: #f59e0b;"></i>
+    <div class="track-btn-info">
+      <span class="track-btn-title" id="track-btn-title">Pedido em andamento</span>
+      <span class="track-btn-status" id="track-btn-status">Acompanhar entrega • Toque p/ ver</span>
+    </div>
+    <i class="fa-solid fa-chevron-right" style="font-size: 0.85rem; opacity: 0.7;"></i>
+  </button>
+
+  <!-- MODAL / BOTTOM SHEET DE ACOMPANHAMENTO DO PEDIDO EM TEMPO REAL -->
+  <div class="customer-track-backdrop" id="customer-track-backdrop" onclick="VIPCustomerTracker.closeTrackingModal()"></div>
+  <aside class="customer-track-modal" id="customer-track-modal">
+    <div class="customer-track-header">
+      <div class="track-header-left">
+        <div class="track-header-title">
+          <i class="fa-solid fa-satellite-dish" style="color: #f59e0b;"></i>
+          <span>Acompanhar Pedido <span class="tag" id="track-modal-order-id">#VIP</span></span>
+        </div>
+      </div>
+      <button type="button" class="btn-close-tracking" onclick="VIPCustomerTracker.closeTrackingModal()" title="Minimizar acompanhamento">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+
+    <div class="customer-track-body">
+      <!-- STEPPER DE PROGRESSO -->
+      <div class="track-stepper-container">
+        <div class="track-stepper-line"></div>
+        <div class="track-step-item current" id="step-track-novo">
+          <div class="step-circle"><i class="fa-solid fa-clipboard-check"></i></div>
+          <span class="step-label">Recebido</span>
+        </div>
+        <div class="track-step-item" id="step-track-preparando">
+          <div class="step-circle"><i class="fa-solid fa-fire-burner"></i></div>
+          <span class="step-label">Preparando</span>
+        </div>
+        <div class="track-step-item" id="step-track-pronto">
+          <div class="step-circle"><i class="fa-solid fa-motorcycle"></i></div>
+          <span class="step-label">A Caminho</span>
+        </div>
+        <div class="track-step-item" id="step-track-entregue">
+          <div class="step-circle"><i class="fa-solid fa-champagne-glasses"></i></div>
+          <span class="step-label">Entregue</span>
+        </div>
+      </div>
+
+      <!-- STATUS ATUAL DETALHADO -->
+      <div class="track-status-box" id="track-status-description-box">
+        <div class="track-desc-title"><i class="fa-solid fa-spinner fa-spin"></i> Conectando ao radar...</div>
+        <p>Acompanhe aqui o andamento dos seus salgados em tempo real.</p>
+      </div>
+
+      <!-- CARD DO MOTOBOY COM ETA (QUANDO A CAMINHO) -->
+      <div class="track-motoboy-card" id="track-motoboy-info-card" style="display: none;">
+        <!-- Renderizado dinamicamente -->
+      </div>
+
+      <!-- RADAR MAPA LEAFLET DO CLIENTE (MOTOBOY AO VIVO) -->
+      <div class="customer-radar-wrapper" id="track-radar-section" style="display: none;">
+        <div id="customer-mini-radar-map"></div>
+      </div>
+
+      <!-- RESUMO DOS ITENS -->
+      <div class="track-summary-box">
+        <div class="track-summary-title">
+          <span><i class="fa-solid fa-receipt"></i> Resumo do Pedido</span>
+          <span id="track-modal-total-amount" style="color: #10b981;">R$ 0,00</span>
+        </div>
+        <div id="track-modal-items-summary">
+          <!-- Renderizado dinamicamente -->
+        </div>
+        <div style="font-size: 0.74rem; color: #64748b; margin-top: 8px;">
+          Forma de Pagamento: <strong id="track-modal-payment-method" style="color: #94a3b8;">--</strong>
+        </div>
+      </div>
+
+      <!-- BOTÃO DE CONTATO WHATSAPP COM A LOJA -->
+      <div class="track-action-btn-row">
+        <a href="#" id="track-modal-wa-loja-btn" target="_blank" class="btn-track-wa-loja">
+          <i class="fa-brands fa-whatsapp"></i> Dúvidas? Falar com a Salgados VIP
+        </a>
+      </div>
+    </div>
+  </aside>
+
   <script src="supabase.min.js"></script>
   <script>
     if (!window.supabase) {
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=64.0"></script>
-  <script src="vip-delivery-men.js?v=64.0"></script>
-  <script src="vip-whatsapp.js?v=64.0"></script>
-  <script src="app.js?v=64.0"></script>
-  <script src="vip-marketing.js?v=64.0"></script>
-  <script src="pwa.js?v=64.0"></script>
+  <script src="shared-data.js?v=65.0"></script>
+  <script src="vip-delivery-men.js?v=65.0"></script>
+  <script src="vip-motoboy-tracker.js?v=65.0"></script>
+  <script src="vip-customer-tracker.js?v=65.0"></script>
+  <script src="vip-whatsapp.js?v=65.0"></script>
+  <script src="app.js?v=65.0"></script>
+  <script src="vip-marketing.js?v=65.0"></script>
+  <script src="pwa.js?v=65.0"></script>
 </body>
 </html>

@@ -9021,18 +9021,24 @@ window.switchMotoboySubTab = function(subTab) {
   currentMotoboySubTab = subTab;
   const btnFleet = document.getElementById("btn-subtab-mb-fleet");
   const btnCrm = document.getElementById("btn-subtab-mb-crm");
+  const btnRadar = document.getElementById("btn-subtab-mb-radar");
   const paneFleet = document.getElementById("subtab-pane-motoboys-fleet");
   const paneCrm = document.getElementById("subtab-pane-motoboys-crm");
+  const paneRadar = document.getElementById("subtab-pane-motoboys-radar");
 
   if (btnFleet) btnFleet.classList.toggle("active", subTab === "fleet");
   if (btnCrm) btnCrm.classList.toggle("active", subTab === "crm");
+  if (btnRadar) btnRadar.classList.toggle("active", subTab === "radar");
 
   if (paneFleet) paneFleet.style.display = subTab === "fleet" ? "block" : "none";
   if (paneCrm) paneCrm.style.display = subTab === "crm" ? "block" : "none";
+  if (paneRadar) paneRadar.style.display = subTab === "radar" ? "block" : "none";
 
   if (subTab === "crm") {
     initMotoboysCRMFilters();
     renderMotoboysCRMPeriodView();
+  } else if (subTab === "radar") {
+    initOrRenderFleetRadar();
   } else {
     renderMotoboysView();
   }
@@ -9772,6 +9778,7 @@ window.confirmDispatchMotoboy = async function() {
     if (cleanPhone) {
       const cleanAddress = encodeURIComponent(order.customer?.address || "");
       const gmapsLink = `https://www.google.com/maps/search/?api=1&query=${cleanAddress}`;
+      const motoboyAppUrl = `${window.location.origin}${window.location.pathname.replace('admin.html', '')}motoboy.html?id=${motoboy.id}&order=${order.id}`;
       const payInfo = getMotoboyPaymentInfo(order);
 
       let trocoMsg = "";
@@ -9784,7 +9791,8 @@ window.confirmDispatchMotoboy = async function() {
         `👤 *Cliente:* ${order.customer?.name || 'Cliente'}\n` +
         `📞 *Telefone:* ${order.customer?.phone || '--'}\n` +
         `📍 *Endereço:* ${order.customer?.address || 'Retirada'}\n` +
-        `🧭 *Abrir Rota no Google Maps:*\n${gmapsLink}\n\n` +
+        `🧭 *Abrir no Google Maps:*\n${gmapsLink}\n\n` +
+        `📱 *Abrir Painel do Entregador com GPS e Rota em Tempo Real:*\n${motoboyAppUrl}\n\n` +
         `💵 *Forma de Pagamento:* ${order.paymentMethod || 'Não informado'}${trocoMsg}\n` +
         `💰 *Total do Pedido:* ${formatBRL(order.totalAmount || 0)}\n` +
         `🏍️ *Sua Taxa nesta Corrida:* ${formatBRL(feeVal)}\n\n` +
@@ -10483,6 +10491,166 @@ window.exportMotoboysCRMCSV = function() {
   link.click();
   document.body.removeChild(link);
   showToastNotification("Planilha de corridas exportada com sucesso!");
+};
+
+// ==============================================================================
+// 2.11.1 RADAR DA FROTA EM TEMPO REAL & CONTATO WHATSAPP (v65.0)
+// ==============================================================================
+let fleetRadarMap = null;
+let fleetMotoboyMarkers = {};
+let fleetStoreMarker = null;
+let fleetRadarSubscription = null;
+
+window.initOrRenderFleetRadar = function() {
+  const mapContainer = document.getElementById("admin-fleet-radar-map");
+  if (!mapContainer) return;
+
+  const storeCoords = (window.VIPMotoboyTracker && window.VIPMotoboyTracker.STORE_COORDS)
+    ? window.VIPMotoboyTracker.STORE_COORDS
+    : { lat: -22.75735, lng: -43.47254 };
+
+  if (!fleetRadarMap) {
+    fleetRadarMap = L.map("admin-fleet-radar-map", {
+      center: [storeCoords.lat, storeCoords.lng],
+      zoom: 14,
+      attributionControl: false
+    });
+
+    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
+      maxZoom: 19
+    }).addTo(fleetRadarMap);
+
+    const storeIcon = L.divIcon({
+      className: "store-icon",
+      html: `<div style="background: #b91c1c; color: #fff; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.4);"><i class="fa-solid fa-store"></i></div>`,
+      iconSize: [34, 34],
+      iconAnchor: [17, 17]
+    });
+    fleetStoreMarker = L.marker([storeCoords.lat, storeCoords.lng], { icon: storeIcon })
+      .bindPopup("<strong>🏠 Salgados VIP (Base/Cozinha)</strong><br>Rua Isabel Pedrosa, 31")
+      .addTo(fleetRadarMap);
+  } else {
+    setTimeout(() => fleetRadarMap.invalidateSize(), 150);
+  }
+
+  // Inicia escuta em tempo real de todos os motoboys via Supabase / Broadcast
+  if (window.VIPMotoboyTracker && !fleetRadarSubscription) {
+    fleetRadarSubscription = window.VIPMotoboyTracker.subscribeAllMotoboys((motoboyLocations) => {
+      renderFleetRadarData(motoboyLocations);
+    });
+  }
+};
+
+window.refreshFleetRadarUI = function() {
+  if (fleetRadarSubscription) {
+    fleetRadarSubscription.unsubscribe();
+    fleetRadarSubscription = null;
+  }
+  window.initOrRenderFleetRadar();
+  showToastNotification("Posições da frota atualizadas com sucesso!");
+};
+
+function renderFleetRadarData(motoboyLocations) {
+  const listEl = document.getElementById("radar-motoboys-sidebar-list");
+  const countBadge = document.getElementById("radar-motoboy-count-badge");
+  if (!Array.isArray(motoboyLocations)) motoboyLocations = [];
+
+  const now = Date.now();
+  // Filtra os que enviaram sinal nos últimos 30 minutos
+  const activeList = motoboyLocations.filter(loc => (now - (loc.last_ping || 0)) < 30 * 60 * 1000);
+
+  if (countBadge) countBadge.textContent = activeList.length;
+
+  if (listEl) {
+    if (activeList.length === 0) {
+      listEl.innerHTML = `
+        <div style="text-align: center; padding: 24px 10px; color: #94a3b8; font-size: 0.85rem;">
+          <i class="fa-solid fa-motorcycle" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 8px;"></i>
+          <p>Nenhum entregador transmitindo GPS no momento.<br><small>Assim que o motoboy abrir o link da corrida, sua moto aparecerá aqui ao vivo.</small></p>
+        </div>
+      `;
+    } else {
+      listEl.innerHTML = activeList.map(loc => {
+        const secsAgo = Math.max(1, Math.round((now - (loc.last_ping || 0)) / 1000));
+        const timeText = secsAgo < 60 ? `há ${secsAgo}s` : `há ${Math.round(secsAgo/60)} min`;
+        const waUrl = window.VIPMotoboyTracker
+          ? window.VIPMotoboyTracker.buildMotoboyWhatsAppUrl(loc.phone, loc.order_id)
+          : `https://wa.me/55${(loc.phone || '').replace(/\D/g, '')}`;
+
+        const orderBadge = loc.order_id
+          ? `<span style="background: #eff6ff; color: #1d4ed8; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">Pedido #${loc.order_id}</span>`
+          : `<span style="background: #f0fdf4; color: #15803d; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.72rem;">Disponível</span>`;
+
+        return `
+          <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <strong style="color: #0f172a; font-size: 0.9rem;">${loc.motoboy_name || 'Entregador'}</strong>
+                <div style="font-size: 0.74rem; color: #64748b; margin-top: 2px;">
+                  <i class="fa-solid fa-gauge-high"></i> ${loc.speed || 0} km/h • Sinal: ${timeText}
+                </div>
+              </div>
+              ${orderBadge}
+            </div>
+            <div style="display: flex; gap: 6px; margin-top: 2px;">
+              <a href="${waUrl}" target="_blank" class="btn-sm" style="flex: 1; background: #25d366; color: #fff; text-decoration: none; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 4px;">
+                <i class="fa-brands fa-whatsapp"></i> Falar no WhatsApp
+              </a>
+              <button type="button" class="btn-sm" onclick="focusRadarOnMotoboy('${loc.motoboy_id}')" style="background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 6px 10px; font-size: 0.75rem; font-weight: 700; cursor: pointer;">
+                <i class="fa-solid fa-crosshairs"></i> Focar
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  // Atualiza marcadores no mapa Leaflet
+  if (fleetRadarMap) {
+    activeList.forEach(loc => {
+      const lat = loc.latitude;
+      const lng = loc.longitude;
+      const heading = loc.heading || 0;
+      const waUrl = window.VIPMotoboyTracker
+        ? window.VIPMotoboyTracker.buildMotoboyWhatsAppUrl(loc.phone, loc.order_id)
+        : `https://wa.me/55${(loc.phone || '').replace(/\D/g, '')}`;
+
+      const popupHtml = `
+        <div style="min-width: 180px;">
+          <strong style="font-size: 0.95rem; color: #0f172a;">🛵 ${loc.motoboy_name || 'Entregador'}</strong><br>
+          <span style="font-size: 0.78rem; color: #64748b;">${loc.order_id ? 'Entregando Pedido #' + loc.order_id : 'Disponível na rua'}</span><br>
+          <div style="margin: 8px 0; font-size: 0.78rem;"><strong>Velocidade:</strong> ${loc.speed || 0} km/h</div>
+          <a href="${waUrl}" target="_blank" style="display: block; text-align: center; background: #25d366; color: #fff; padding: 6px 10px; border-radius: 6px; text-decoration: none; font-weight: 700; font-size: 0.78rem;">
+            <i class="fa-brands fa-whatsapp"></i> Falar no WhatsApp
+          </a>
+        </div>
+      `;
+
+      if (!fleetMotoboyMarkers[loc.motoboy_id]) {
+        const bikeIcon = L.divIcon({
+          className: "admin-bike-marker",
+          html: `<div style="width: 34px; height: 34px; background: #d97706; color: #fff; border: 2px solid #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transform: rotate(${heading}deg);"><i class="fa-solid fa-motorcycle"></i></div>`,
+          iconSize: [34, 34],
+          iconAnchor: [17, 17]
+        });
+        fleetMotoboyMarkers[loc.motoboy_id] = L.marker([lat, lng], { icon: bikeIcon })
+          .bindPopup(popupHtml)
+          .addTo(fleetRadarMap);
+      } else {
+        fleetMotoboyMarkers[loc.motoboy_id].setLatLng([lat, lng]);
+        fleetMotoboyMarkers[loc.motoboy_id].setPopupContent(popupHtml);
+      }
+    });
+  }
+}
+
+window.focusRadarOnMotoboy = function(motoboyId) {
+  if (fleetRadarMap && fleetMotoboyMarkers[motoboyId]) {
+    const m = fleetMotoboyMarkers[motoboyId];
+    fleetRadarMap.setView(m.getLatLng(), 16);
+    m.openPopup();
+  }
 };
 
 // ==============================================================================

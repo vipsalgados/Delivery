@@ -2782,6 +2782,11 @@ document.getElementById("btn-finish-whatsapp").addEventListener("click", async (
   // 5. Exibe confirmação visual de sucesso
   showToastNotification(`Pedido #${savedOrder.id} finalizado com sucesso!`);
 
+  // 5.1 Ativa automaticamente o Card e o Radar de Acompanhamento do Pedido em Tempo Real
+  if (window.VIPCustomerTracker && typeof window.VIPCustomerTracker.setActiveOrder === "function") {
+    window.VIPCustomerTracker.setActiveOrder(savedOrder.id);
+  }
+
   // 6. Abre o WhatsApp com a mensagem do pedido (infraestrutura blindada VIPWhatsApp)
   const waUrl = (window.VIPWhatsApp && typeof window.VIPWhatsApp.Link.buildStoreOrderUrl === "function")
     ? window.VIPWhatsApp.Link.buildStoreOrderUrl(msg, cfg)
