@@ -579,6 +579,359 @@
       max-width: 320px;
       margin: 0 auto 20px auto;
     }
+
+    /* TELA DE LOGIN DO ENTREGADOR */
+    .motoboy-login-overlay {
+      position: fixed;
+      inset: 0;
+      background: #090d16;
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .motoboy-login-card {
+      background: #131b2e;
+      border: 1px solid #1e293b;
+      border-radius: 18px;
+      padding: 30px 24px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      text-align: center;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .login-brand-icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-radius: 16px;
+      margin: 0 auto 16px auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      color: #000;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.4);
+    }
+
+    .motoboy-login-card h2 {
+      font-size: 1.35rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 6px;
+    }
+
+    .motoboy-login-card p {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+      line-height: 1.4;
+    }
+
+    .login-form-group {
+      text-align: left;
+      margin-bottom: 14px;
+    }
+
+    .login-form-group label {
+      display: block;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-bottom: 6px;
+    }
+
+    .login-input-wrap {
+      position: relative;
+    }
+
+    .login-input-wrap i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .login-input-wrap input {
+      width: 100%;
+      background: #090d16;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px 14px 12px 38px;
+      color: #fff;
+      font-size: 0.95rem;
+      font-weight: 600;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    .login-input-wrap input:focus {
+      border-color: #f59e0b;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+    }
+
+    .btn-login-submit {
+      width: 100%;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #000;
+      border: none;
+      border-radius: 10px;
+      padding: 13px;
+      font-weight: 800;
+      font-size: 0.95rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 18px;
+      box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+      transition: transform 0.15s;
+    }
+
+    .btn-login-submit:active {
+      transform: scale(0.98);
+    }
+
+    .login-error-msg {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #fca5a5;
+      font-size: 0.8rem;
+      font-weight: 600;
+      border-radius: 8px;
+      padding: 9px 12px;
+      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-align: left;
+    }
+
+    /* BOTÃO LOGOUT NO HEADER */
+    .btn-motoboy-logout {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+
+    .btn-motoboy-logout:hover {
+      background: #ef4444;
+      color: #fff;
+    }
+
+    /* NAVEGAÇÃO DE ABAS DO MOTOBOY */
+    .motoboy-nav-tabs {
+      background: #0f172a;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      padding: 4px 12px;
+      gap: 8px;
+      position: sticky;
+      top: 63px;
+      z-index: 950;
+    }
+
+    .motoboy-nav-tab {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 9px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .motoboy-nav-tab.active {
+      background: rgba(245, 158, 11, 0.15);
+      color: #f59e0b;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    /* CARD DE PERFIL (SOMENTE LEITURA) */
+    .motoboy-profile-container {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .readonly-banner {
+      background: rgba(2, 132, 199, 0.12);
+      border: 1px solid rgba(2, 132, 199, 0.3);
+      color: #38bdf8;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mb-profile-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+    }
+
+    .mb-profile-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 14px;
+      margin-bottom: 14px;
+    }
+
+    .mb-profile-avatar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mb-profile-avatar-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border-radius: 12px;
+      color: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+
+    .mb-profile-name {
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .mb-profile-vehicle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .mb-plate-badge {
+      background: #fef3c7;
+      color: #78350f;
+      font-weight: 800;
+      font-size: 0.78rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 4px;
+    }
+
+    .mb-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .mb-kpi-box {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 10px 8px;
+      text-align: center;
+    }
+
+    .mb-kpi-val {
+      font-size: 1.05rem;
+      font-weight: 800;
+      display: block;
+    }
+
+    .mb-kpi-lbl {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+      display: block;
+    }
+
+    .mb-detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      font-size: 0.85rem;
+    }
+
+    .mb-detail-row:last-child {
+      border-bottom: none;
+    }
+
+    .mb-detail-lbl {
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mb-detail-val {
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .mb-workdays-row {
+      display: flex;
+      gap: 5px;
+      margin-top: 6px;
+    }
+
+    .mb-day-chip {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      font-size: 0.65rem;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #1e293b;
+      color: #64748b;
+    }
+
+    .mb-day-chip.active {
+      background: #10b981;
+      color: #fff;
+    }
+
+    .mb-day-chip.today {
+      box-shadow: 0 0 0 2px #f59e0b;
+    }
   </style>
 </head>
 <body>
@@ -594,14 +947,67 @@
         <p id="motoboy-profile-label">App do Entregador</p>
       </div>
     </div>
-    <div class="gps-status-pill waiting" id="gps-status-pill">
-      <span class="gps-pulse-dot"></span>
-      <span id="gps-status-text">Conectando GPS...</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <div class="gps-status-pill waiting" id="gps-status-pill" style="display: none;">
+        <span class="gps-pulse-dot"></span>
+        <span id="gps-status-text">Conectando GPS...</span>
+      </div>
+      <button type="button" class="btn-motoboy-logout" id="btn-motoboy-logout" onclick="handleMotoboyLogout()" title="Sair do Perfil" style="display: none;">
+        <i class="fa-solid fa-right-from-bracket"></i> Sair
+      </button>
     </div>
   </header>
 
+  <!-- TELA DE LOGIN DO ENTREGADOR (LOGIN = NOME, SENHA = PLACA DA MOTO) -->
+  <div id="motoboy-login-view" class="motoboy-login-overlay" style="display: none;">
+    <div class="motoboy-login-card">
+      <div class="login-brand-icon">
+        <i class="fa-solid fa-motorcycle"></i>
+      </div>
+      <h2>Área do Entregador</h2>
+      <p>Informe seu nome e a placa da sua moto para acessar seu perfil e acompanhar suas entregas.</p>
+
+      <form onsubmit="handleMotoboyLoginSubmit(event)" id="motoboy-login-form">
+        <div class="login-form-group">
+          <label for="mb-login-name"><i class="fa-solid fa-user"></i> Nome do Entregador (Login)</label>
+          <div class="login-input-wrap">
+            <i class="fa-solid fa-user"></i>
+            <input type="text" id="mb-login-name" required placeholder="Ex: Jonathas" autocomplete="username">
+          </div>
+        </div>
+
+        <div class="login-form-group">
+          <label for="mb-login-pass"><i class="fa-solid fa-key"></i> Placa da Moto (Senha)</label>
+          <div class="login-input-wrap">
+            <i class="fa-solid fa-id-card"></i>
+            <input type="text" id="mb-login-pass" required placeholder="Ex: FLUO123 ou BRA2E19" autocomplete="current-password" style="text-transform: uppercase;">
+          </div>
+        </div>
+
+        <div id="mb-login-error" class="login-error-msg" style="display: none;">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span id="mb-login-error-text">Nome ou placa da moto incorretos.</span>
+        </div>
+
+        <button type="submit" class="btn-login-submit" id="btn-login-submit">
+          <i class="fa-solid fa-right-to-bracket"></i> Entrar no Meu Perfil
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- NAVEGAÇÃO DE ABAS DO MOTOBOY (ENTREGAS VS MEU PERFIL) -->
+  <nav class="motoboy-nav-tabs" id="motoboy-nav-tabs" style="display: none;">
+    <button type="button" class="motoboy-nav-tab active" id="tab-btn-deliveries" onclick="switchMotoboyTab('deliveries')">
+      <i class="fa-solid fa-compass"></i> Minhas Entregas & GPS
+    </button>
+    <button type="button" class="motoboy-nav-tab" id="tab-btn-profile" onclick="switchMotoboyTab('profile')">
+      <i class="fa-solid fa-id-card"></i> Meu Perfil / Card
+    </button>
+  </nav>
+
   <!-- BARRA DE CONTROLE & STATUS DO GPS -->
-  <div class="gps-action-bar" id="gps-action-bar">
+  <div class="gps-action-bar" id="gps-action-bar" style="display: none;">
     <div style="display: flex; align-items: center; gap: 10px;">
       <i class="fa-solid fa-satellite-dish" style="color: #f59e0b; font-size: 1.2rem;" id="gps-action-icon"></i>
       <div>
@@ -615,11 +1021,13 @@
   </div>
 
   <!-- CONTAINER -->
-  <main class="motoboy-container">
+  <main class="motoboy-container" id="motoboy-main-view" style="display: none;">
 
-    <!-- SEÇÃO DA CORRIDA ATIVA -->
-    <div id="active-order-view">
-      <div class="delivery-order-card">
+    <!-- ABA 1: MINHAS ENTREGAS & GPS -->
+    <div id="pane-tab-deliveries">
+      <!-- SEÇÃO DA CORRIDA ATIVA -->
+      <div id="active-order-view">
+        <div class="delivery-order-card">
         <div class="order-header-row">
           <span class="order-tag" id="order-id-tag"><i class="fa-solid fa-box"></i> Pedido #VIP-0000</span>
           <span class="fee-badge" id="motoboy-fee-badge">Sua Taxa: R$ 7,00</span>
@@ -708,6 +1116,29 @@
       </div>
     </div>
 
+    </div> <!-- Fim #pane-tab-deliveries -->
+
+    <!-- ABA 2: MEU PERFIL & MEU CARD (100% SOMENTE VISUALIZAÇÃO) -->
+    <div id="pane-tab-profile" style="display: none;">
+      <div class="motoboy-profile-container">
+        <!-- Banner de Perfil Somente Leitura -->
+        <div class="readonly-banner">
+          <i class="fa-solid fa-lock" style="font-size: 1.1rem; color: #38bdf8;"></i>
+          <div>
+            <strong>Perfil em Modo Somente Visualização</strong>
+            <div style="font-size: 0.72rem; color: #94a3b8; margin-top: 2px;">
+              Você tem acesso exclusivo para visualizar seus dados e extrato. Modificações na escala ou valores são realizadas apenas pela administração da Salgados VIP.
+            </div>
+          </div>
+        </div>
+
+        <!-- Card Oficial do Motoboy -->
+        <div class="mb-profile-card" id="motoboy-profile-card-content">
+          <!-- Conteúdo gerado via motoboy.js -->
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- MODAL DE CONFIRMAÇÃO DE ENTREGA -->
@@ -732,9 +1163,9 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=67.0"></script>
-  <script src="vip-delivery-men.js?v=67.0"></script>
-  <script src="vip-motoboy-tracker.js?v=67.0"></script>
-  <script src="motoboy.js?v=67.0"></script>
+  <script src="shared-data.js?v=68.0"></script>
+  <script src="vip-delivery-men.js?v=68.0"></script>
+  <script src="vip-motoboy-tracker.js?v=68.0"></script>
+  <script src="motoboy.js?v=68.0"></script>
 </body>
 </html>

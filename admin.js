@@ -94,8 +94,29 @@ window.handleAdminLogin = async function(event) {
     if (res.success) {
       checkSession();
     } else {
-      if (errorText) errorText.textContent = res.message || "Usuário ou senha incorretos.";
-      if (errorEl) errorEl.style.display = "flex";
+      // Verifica se é o login de um entregador (Nome + Placa da moto)
+      let isMotoboy = false;
+      if (window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.authenticateCloud === "function") {
+        const mbRes = await window.VIPDeliveryMenDB.authenticateCloud(user, pass);
+        if (mbRes && mbRes.success && mbRes.motoboy) {
+          isMotoboy = true;
+          try {
+            localStorage.setItem("vip_motoboy_auth", JSON.stringify(mbRes.motoboy));
+            sessionStorage.setItem("vip_motoboy_auth", JSON.stringify(mbRes.motoboy));
+            localStorage.setItem("vip_active_motoboy_id", mbRes.motoboy.id);
+          } catch (e) {}
+          showToastNotification(`Olá ${mbRes.motoboy.name}! Redirecionando para seu App do Entregador...`);
+          setTimeout(() => {
+            window.location.href = `motoboy.html?id=${mbRes.motoboy.id}`;
+          }, 800);
+          return;
+        }
+      }
+
+      if (!isMotoboy) {
+        if (errorText) errorText.textContent = res.message || "Usuário ou senha incorretos.";
+        if (errorEl) errorEl.style.display = "flex";
+      }
     }
   } catch (e) {
     console.error("Erro no login VIPAuth:", e);
@@ -9219,7 +9240,7 @@ window.renderMotoboysView = function() {
                 <div class="motoboy-info-head">
                   <h3>${m.name}</h3>
                   <span class="motoboy-vehicle-text">
-                    <i class="fa-solid fa-gauge-high"></i> ${m.vehicle || "Moto padrão"}
+                    <i class="fa-solid fa-motorcycle"></i> ${m.vehicle || "Moto"} • Placa/Senha: <strong style="color: #b45309; background: #fef3c7; padding: 1px 6px; border-radius: 4px; font-weight: 800; letter-spacing: 0.5px;">${m.plate || 'FLUO123'}</strong>
                   </span>
                 </div>
               </div>
@@ -9476,6 +9497,8 @@ window.openMotoboyModal = function(motoboyId) {
     nameInput.value = motoboy.name || "";
     phoneInput.value = motoboy.phone || "";
     vehicleInput.value = motoboy.vehicle || "";
+    const plateInput = document.getElementById("motoboy-plate");
+    if (plateInput) plateInput.value = motoboy.plate || "";
     if (dailyRateInput) dailyRateInput.value = (motoboy.dailyRate !== undefined ? motoboy.dailyRate : 0.00).toFixed(2);
     feeInput.value = (motoboy.defaultFee !== undefined ? motoboy.defaultFee : 7.00).toFixed(2);
     pixTypeSelect.value = motoboy.pixType || "Telefone";
@@ -9492,6 +9515,8 @@ window.openMotoboyModal = function(motoboyId) {
     nameInput.value = "";
     phoneInput.value = "";
     vehicleInput.value = "";
+    const plateInput = document.getElementById("motoboy-plate");
+    if (plateInput) plateInput.value = "";
     if (dailyRateInput) dailyRateInput.value = "50.00";
     feeInput.value = "7.00";
     pixTypeSelect.value = "Telefone";
@@ -9528,6 +9553,7 @@ window.saveMotoboyFromModal = async function() {
   const name = document.getElementById("motoboy-name").value.trim();
   const phone = document.getElementById("motoboy-phone").value.trim();
   const vehicle = document.getElementById("motoboy-vehicle").value.trim();
+  const plate = document.getElementById("motoboy-plate") ? document.getElementById("motoboy-plate").value.trim().toUpperCase() : "";
   const dailyRate = parseFloat(document.getElementById("motoboy-daily-rate")?.value) || 0.00;
   const fee = parseFloat(document.getElementById("motoboy-fee").value) || 7.00;
   const pixType = document.getElementById("motoboy-pix-type").value;
@@ -9546,6 +9572,7 @@ window.saveMotoboyFromModal = async function() {
     name,
     phone,
     vehicle,
+    plate,
     dailyRate,
     defaultFee: fee,
     workDays: workDaysToSave,

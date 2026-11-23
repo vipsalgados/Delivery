@@ -32,26 +32,233 @@
   const paramOrderId = urlParams.get("order") || urlParams.get("orderId");
 
   // ============================================================================
-  // 1. INICIALIZAÇÃO
+  // 1. AUTENTICAÇÃO DO MOTOBOY (LOGIN = NOME, SENHA = PLACA DA MOTO)
+  // ============================================================================
+  function getMotoboyAuthSession() {
+    try {
+      const raw = sessionStorage.getItem("vip_motoboy_auth") || localStorage.getItem("vip_motoboy_auth");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && parsed.id) return parsed;
+      }
+    } catch (e) {}
+    return null;
+  }
+
+  function showLoginView() {
+    const loginOverlay = document.getElementById("motoboy-login-view");
+    const mainView = document.getElementById("motoboy-main-view");
+    const navTabs = document.getElementById("motoboy-nav-tabs");
+    const gpsBar = document.getElementById("gps-action-bar");
+    const gpsPill = document.getElementById("gps-status-pill");
+    const logoutBtn = document.getElementById("btn-motoboy-logout");
+    const profileLabel = document.getElementById("motoboy-profile-label");
+
+    if (loginOverlay) loginOverlay.style.display = "flex";
+    if (mainView) mainView.style.display = "none";
+    if (navTabs) navTabs.style.display = "none";
+    if (gpsBar) gpsBar.style.display = "none";
+    if (gpsPill) gpsPill.style.display = "none";
+    if (logoutBtn) logoutBtn.style.display = "none";
+    if (profileLabel) profileLabel.textContent = "Acesso do Entregador";
+
+    // Pré-preenche o nome se houver parâmetro na URL
+    const nameInput = document.getElementById("mb-login-name");
+    const passInput = document.getElementById("mb-login-pass");
+
+    if (nameInput && !nameInput.value) {
+      if (paramMotoboyId && window.VIPDatabase && typeof window.VIPDatabase.getMotoboyById === "function") {
+        const mb = window.VIPDatabase.getMotoboyById(paramMotoboyId);
+        if (mb && mb.name) nameInput.value = mb.name;
+      }
+    }
+
+    setTimeout(() => {
+      if (nameInput && !nameInput.value) nameInput.focus();
+      else if (passInput) passInput.focus();
+    }, 200);
+  }
+
+  window.handleMotoboyLoginSubmit = async function (e) {
+    if (e && e.preventDefault) e.preventDefault();
+
+    const nameInput = document.getElementById("mb-login-name");
+    const passInput = document.getElementById("mb-login-pass");
+    const errBox = document.getElementById("mb-login-error");
+    const errText = document.getElementById("mb-login-error-text");
+    const submitBtn = document.getElementById("btn-login-submit");
+
+    const nameVal = nameInput ? nameInput.value.trim() : "";
+    const passVal = passInput ? passInput.value.trim() : "";
+
+    if (!nameVal || !passVal) {
+      if (errBox) errBox.style.display = "flex";
+      if (errText) errText.textContent = "Por favor, digite seu nome e a placa da sua moto.";
+      return;
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Verificando...`;
+    }
+    if (errBox) errBox.style.display = "none";
+
+    try {
+      let authRes = null;
+      if (window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.authenticateCloud === "function") {
+        authRes = await window.VIPDeliveryMenDB.authenticateCloud(nameVal, passVal);
+      } else if (window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.authenticate === "function") {
+        authRes = window.VIPDeliveryMenDB.authenticate(nameVal, passVal);
+      }
+
+      if (authRes && authRes.success && authRes.motoboy) {
+        const mb = authRes.motoboy;
+        try {
+          const sessionObj = {
+            id: mb.id,
+            name: mb.name,
+            phone: mb.phone,
+            vehicle: mb.vehicle,
+            plate: mb.plate || "",
+            dailyRate: mb.dailyRate,
+            defaultFee: mb.defaultFee,
+            workDays: mb.workDays,
+            pixKey: mb.pixKey,
+            pixType: mb.pixType,
+            active: mb.active,
+            loggedAt: Date.now()
+          };
+          localStorage.setItem("vip_motoboy_auth", JSON.stringify(sessionObj));
+          sessionStorage.setItem("vip_motoboy_auth", JSON.stringify(sessionObj));
+          localStorage.setItem("vip_active_motoboy_id", mb.id);
+        } catch (err) {}
+
+        await startMotoboyApp(mb);
+      } else {
+        if (errBox) errBox.style.display = "flex";
+        if (errText) errText.textContent = authRes?.message || "Nome ou placa da moto incorretos. Verifique com a loja.";
+      }
+    } catch (err) {
+      console.error("Erro na autenticação do motoboy:", err);
+      if (errBox) errBox.style.display = "flex";
+      if (errText) errText.textContent = "Erro ao autenticar. Verifique sua conexão com a internet.";
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="fa-solid fa-right-to-bracket"></i> Entrar no Meu Perfil`;
+      }
+    }
+  };
+
+  window.handleMotoboyLogout = function () {
+    if (!confirm("Deseja sair do seu perfil de entregador?")) return;
+
+    if (window.VIPMotoboyTracker) {
+      window.VIPMotoboyTracker.stopTransmitter().catch(() => {});
+    }
+
+    try {
+      localStorage.removeItem("vip_motoboy_auth");
+      sessionStorage.removeItem("vip_motoboy_auth");
+      localStorage.removeItem("vip_active_motoboy_id");
+    } catch (e) {}
+
+    currentMotoboy = null;
+    showLoginView();
+  };
+
+  // ============================================================================
+  // 2. INICIALIZAÇÃO DA APLICAÇÃO LOGADA
   // ============================================================================
   document.addEventListener("DOMContentLoaded", async () => {
-    // 1. Inicializa banco Supabase
+    // 1. Inicializa bancos e sincroniza entregadores
     if (window.VIPDatabase && typeof window.VIPDatabase.initSupabase === "function") {
       await window.VIPDatabase.initSupabase().catch(() => {});
     }
+    if (window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.syncFromCloud === "function") {
+      await window.VIPDeliveryMenDB.syncFromCloud().catch(() => {});
+    }
 
-    // 2. Identifica o entregador
-    await loadMotoboyProfile();
+    // 2. Checagem de sessão de autenticação
+    const authSession = getMotoboyAuthSession();
+    if (!authSession) {
+      showLoginView();
+      return;
+    }
 
-    // 3. Identifica o pedido ativo
+    // 3. Inicializa o painel do entregador autenticado
+    await startMotoboyApp(authSession);
+  });
+
+  async function startMotoboyApp(authMb) {
+    currentMotoboy = authMb;
+
+    // Atualiza com dados mais frescos do banco se disponíveis
+    if (window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.getById === "function") {
+      const fresh = window.VIPDeliveryMenDB.getById(authMb.id);
+      if (fresh) currentMotoboy = fresh;
+    }
+
+    // Mostra elementos visuais do app
+    const loginOverlay = document.getElementById("motoboy-login-view");
+    const mainView = document.getElementById("motoboy-main-view");
+    const navTabs = document.getElementById("motoboy-nav-tabs");
+    const gpsBar = document.getElementById("gps-action-bar");
+    const gpsPill = document.getElementById("gps-status-pill");
+    const logoutBtn = document.getElementById("btn-motoboy-logout");
+    const profileLabel = document.getElementById("motoboy-profile-label");
+
+    if (loginOverlay) loginOverlay.style.display = "none";
+    if (mainView) mainView.style.display = "block";
+    if (navTabs) navTabs.style.display = "flex";
+    if (gpsBar) gpsBar.style.display = "flex";
+    if (gpsPill) gpsPill.style.display = "flex";
+    if (logoutBtn) logoutBtn.style.display = "inline-flex";
+
+    if (profileLabel) {
+      const plateText = currentMotoboy.plate ? ` • [${currentMotoboy.plate}]` : "";
+      profileLabel.textContent = `${currentMotoboy.name}${plateText}`;
+    }
+
+    // Identifica o pedido ativo
     await loadActiveOrder();
 
-    // 4. Inicializa o mapa Leaflet
+    // Inicializa o mapa Leaflet
     await initLeafletMap();
 
-    // 5. Inicia o transmissor de GPS
+    // Inicia o transmissor de GPS
     startGpsTracking();
-  });
+
+    // Renderiza o card do motoboy em modo somente leitura
+    renderMotoboyProfileCard();
+  }
+
+  // Alternador de Abas (Entregas vs Meu Perfil / Card)
+  window.switchMotoboyTab = function (tabName) {
+    const btnDeliveries = document.getElementById("tab-btn-deliveries");
+    const btnProfile = document.getElementById("tab-btn-profile");
+    const paneDeliveries = document.getElementById("pane-tab-deliveries");
+    const paneProfile = document.getElementById("pane-tab-profile");
+    const gpsBar = document.getElementById("gps-action-bar");
+
+    if (tabName === "profile") {
+      btnDeliveries?.classList.remove("active");
+      btnProfile?.classList.add("active");
+      if (paneDeliveries) paneDeliveries.style.display = "none";
+      if (paneProfile) paneProfile.style.display = "block";
+      if (gpsBar) gpsBar.style.display = "none";
+      renderMotoboyProfileCard();
+    } else {
+      btnProfile?.classList.remove("active");
+      btnDeliveries?.classList.add("active");
+      if (paneProfile) paneProfile.style.display = "none";
+      if (paneDeliveries) paneDeliveries.style.display = "block";
+      if (gpsBar) gpsBar.style.display = "flex";
+      if (leafletMap) {
+        setTimeout(() => leafletMap.invalidateSize(), 150);
+      }
+    }
+  };
 
   function normalizeOrder(raw) {
     if (!raw) return null;
@@ -637,6 +844,195 @@
     renderOrderView();
 
     alert("🎉 Entrega confirmada com sucesso! Parabéns pelo atendimento com excelência!");
+  };
+
+  // ============================================================================
+  // 8. CARD DO PERFIL DO MOTOBOY (100% SOMENTE LEITURA / VISUALIZAÇÃO)
+  // ============================================================================
+  function renderMotoboyProfileCard() {
+    const container = document.getElementById("motoboy-profile-card-content");
+    if (!container || !currentMotoboy) return;
+
+    const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+    const currentDayIdx = new Date().getDay();
+    const workDays = Array.isArray(currentMotoboy.workDays) && currentMotoboy.workDays.length > 0
+      ? currentMotoboy.workDays
+      : [0, 1, 2, 3, 4, 5, 6];
+
+    // Corridas de hoje
+    const orders = (window.VIPDatabase && typeof window.VIPDatabase.getOrders === "function")
+      ? window.VIPDatabase.getOrders()
+      : [];
+
+    const todayStr = (function () {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    })();
+
+    const todayRuns = orders.filter(o => {
+      if (!o.createdAt || o.status === "cancelado") return false;
+      const d = new Date(o.createdAt);
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (dStr !== todayStr) return false;
+      const mbId = o.deliveryMan?.id || o.delivery_man?.id;
+      return mbId && String(mbId) === String(currentMotoboy.id);
+    });
+
+    let totalFees = 0;
+    let totalCashCollected = 0;
+
+    todayRuns.forEach(o => {
+      const fee = Number(o.deliveryMan?.fee !== undefined ? o.deliveryMan.fee : (currentMotoboy.defaultFee || 7));
+      totalFees += fee;
+      const pay = String(o.paymentMethod || o.payment_method || "").toLowerCase();
+      if (pay.includes("dinheiro") || pay.includes("especie") || pay.includes("espécie")) {
+        totalCashCollected += Number(o.totalAmount || o.total_amount || 0);
+      }
+    });
+
+    // Escala de dias da semana
+    const workDaysHtml = [0, 1, 2, 3, 4, 5, 6].map(idx => {
+      const isScheduled = workDays.includes(idx);
+      const isToday = idx === currentDayIdx;
+      let cls = "mb-day-chip";
+      if (isScheduled) cls += " active";
+      if (isToday) cls += " today";
+      return `<span class="${cls}" title="${WEEKDAYS[idx]}: ${isScheduled ? 'Escalado p/ Entregas' : 'Folga'}">${WEEKDAYS[idx]}</span>`;
+    }).join("");
+
+    // Lista de corridas de hoje
+    const runsListHtml = todayRuns.length === 0
+      ? `<div style="text-align: center; padding: 18px 10px; color: #94a3b8; font-size: 0.8rem; font-style: italic;">Nenhuma corrida finalizada por você hoje ainda.</div>`
+      : todayRuns.map(r => {
+          const timeStr = r.createdAt ? new Date(r.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+          const feeVal = Number(r.deliveryMan?.fee !== undefined ? r.deliveryMan.fee : (currentMotoboy.defaultFee || 7));
+          const isDone = (r.status === "concluido" || r.status === "finalizado");
+          const statusBadge = isDone
+            ? `<span style="background: rgba(16, 185, 129, 0.15); color: #10b981; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.7rem;">Entregue</span>`
+            : `<span style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; padding: 2px 6px; border-radius: 4px; font-weight: 700; font-size: 0.7rem;">Em rota</span>`;
+
+          return `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.06); font-size: 0.82rem;">
+              <div>
+                <div style="font-weight: 700; color: #fff;">Pedido #${r.id} • ${timeStr}</div>
+                <div style="color: #94a3b8; font-size: 0.72rem; margin-top: 2px;">${r.customer?.name || 'Cliente'} • ${r.paymentMethod || 'Pagamento'}</div>
+              </div>
+              <div style="text-align: right;">
+                <div style="font-weight: 800; color: #10b981;">+ R$ ${feeVal.toFixed(2).replace('.', ',')}</div>
+                ${statusBadge}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+    const waLojaUrl = window.VIPMotoboyTracker
+      ? window.VIPMotoboyTracker.buildStoreWhatsAppUrl(currentMotoboy.name, null, `Olá Salgados VIP! Aqui é o entregador ${currentMotoboy.name}.`)
+      : `https://wa.me/5521986758102`;
+
+    container.innerHTML = `
+      <!-- Cabeçalho do Card -->
+      <div class="mb-profile-header">
+        <div class="mb-profile-avatar-wrap">
+          <div class="mb-profile-avatar-icon">
+            <i class="fa-solid fa-motorcycle"></i>
+          </div>
+          <div>
+            <div class="mb-profile-name">${currentMotoboy.name}</div>
+            <div class="mb-profile-vehicle">
+              <i class="fa-solid fa-gauge-high"></i> ${currentMotoboy.vehicle || "Moto"}
+            </div>
+            <span class="mb-plate-badge" title="Sua placa e senha de acesso">
+              <i class="fa-solid fa-key"></i> Placa / Senha: <strong>${currentMotoboy.plate || 'FLUO123'}</strong>
+            </span>
+          </div>
+        </div>
+        <div style="text-align: right;">
+          <span style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); padding: 4px 10px; border-radius: 20px; font-size: 0.74rem; font-weight: 700;">
+            ${currentMotoboy.active !== false ? '🟢 Conectado' : '⏸️ Em Pausa'}
+          </span>
+        </div>
+      </div>
+
+      <!-- Resumo Financeiro de Hoje (KPIs) -->
+      <div class="mb-kpi-grid">
+        <div class="mb-kpi-box">
+          <span class="mb-kpi-val" style="color: #38bdf8;">${todayRuns.length}</span>
+          <span class="mb-kpi-lbl">Corridas Hoje</span>
+        </div>
+        <div class="mb-kpi-box">
+          <span class="mb-kpi-val" style="color: #10b981;">R$ ${totalFees.toFixed(2).replace('.', ',')}</span>
+          <span class="mb-kpi-lbl">Taxas a Receber</span>
+        </div>
+        <div class="mb-kpi-box">
+          <span class="mb-kpi-val" style="color: #f59e0b;">R$ ${totalCashCollected.toFixed(2).replace('.', ',')}</span>
+          <span class="mb-kpi-lbl">Dinheiro em Mãos</span>
+        </div>
+      </div>
+
+      <!-- Detalhes do Perfil Cadastrado -->
+      <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+        <div class="mb-detail-row">
+          <span class="mb-detail-lbl"><i class="fa-solid fa-money-bill-transfer"></i> Diária Fixa Acordada:</span>
+          <span class="mb-detail-val" style="color: #38bdf8;">R$ ${(Number(currentMotoboy.dailyRate) || 0).toFixed(2).replace('.', ',')}</span>
+        </div>
+        <div class="mb-detail-row">
+          <span class="mb-detail-lbl"><i class="fa-solid fa-tag"></i> Taxa Padrão por Corrida:</span>
+          <span class="mb-detail-val" style="color: #10b981;">R$ ${(Number(currentMotoboy.defaultFee) || 7).toFixed(2).replace('.', ',')}</span>
+        </div>
+        <div class="mb-detail-row">
+          <span class="mb-detail-lbl"><i class="fa-solid fa-phone"></i> Telefone / WhatsApp:</span>
+          <span class="mb-detail-val">${currentMotoboy.phone || 'Não informado'}</span>
+        </div>
+        <div class="mb-detail-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+          <span class="mb-detail-lbl"><i class="fa-solid fa-calendar-days"></i> Escala Semanal de Trabalho:</span>
+          <div class="mb-workdays-row">${workDaysHtml}</div>
+        </div>
+      </div>
+
+      <!-- Chave PIX Cadastrada -->
+      ${currentMotoboy.pixKey ? `
+        <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px; padding: 12px; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-size: 0.72rem; color: #6ee7b7; font-weight: 700;">Chave PIX Cadastrada (${currentMotoboy.pixType || 'PIX'}):</div>
+            <div style="font-size: 0.95rem; font-weight: 800; color: #fff; margin-top: 2px;">${currentMotoboy.pixKey}</div>
+          </div>
+          <button type="button" onclick="copyMotoboyPixKey('${currentMotoboy.pixKey}')" style="background: #10b981; color: #fff; border: none; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+            <i class="fa-solid fa-copy"></i> Copiar
+          </button>
+        </div>
+      ` : `
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--card-border); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 0.8rem; color: #94a3b8;">
+          <i class="fa-solid fa-info-circle"></i> Nenhuma chave PIX cadastrada. Informe à loja para receber seus repasses.
+        </div>
+      `}
+
+      <!-- Extrato Detalhado de Corridas Hoje -->
+      <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--card-border); border-radius: 10px; padding: 14px; margin-bottom: 14px;">
+        <h4 style="font-size: 0.9rem; font-weight: 800; color: #fff; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+          <span><i class="fa-solid fa-receipt" style="color: #f59e0b;"></i> Corridas Realizadas Hoje</span>
+          <span style="font-size: 0.72rem; color: #94a3b8;">${todayRuns.length} entrega(s)</span>
+        </h4>
+        <div style="display: flex; flex-direction: column;">
+          ${runsListHtml}
+        </div>
+      </div>
+
+      <!-- Botão de Contato com a Loja -->
+      <div style="text-align: center; margin-top: 6px;">
+        <a href="${waLojaUrl}" target="_blank" class="btn-contact" style="display: inline-flex; width: 100%; justify-content: center; padding: 12px; font-size: 0.88rem;">
+          <i class="fa-brands fa-whatsapp" style="color: #25d366; font-size: 1.1rem;"></i> Falar com a Gerência da Loja
+        </a>
+      </div>
+    `;
+  }
+
+  window.copyMotoboyPixKey = function (key) {
+    if (!key) return;
+    navigator.clipboard.writeText(key).then(() => {
+      alert("Chave PIX copiada para a área de transferência!");
+    }).catch(() => {
+      prompt("Copie sua chave PIX abaixo:", key);
+    });
   };
 
 })();

@@ -89,11 +89,21 @@
     const dailyRate = raw.daily_rate !== undefined ? Number(raw.daily_rate) : (Number(raw.dailyRate) || 0);
     const defaultFee = raw.default_fee !== undefined ? Number(raw.default_fee) : (Number(raw.defaultFee) || 7);
 
+    // Extrai placa do veículo caso não esteja explicitamente informada
+    let plate = String(raw.plate || "").trim();
+    if (!plate && raw.vehicle) {
+      const matchParen = raw.vehicle.match(/placa[:\s]*([A-Z0-9-]+)/i);
+      if (matchParen && matchParen[1]) {
+        plate = matchParen[1].trim();
+      }
+    }
+
     return {
       id: String(raw.id || `mb-${Date.now()}`),
       name: String(raw.name || "Entregador").trim(),
       phone: String(raw.phone || "").trim(),
       vehicle: String(raw.vehicle || "").trim(),
+      plate: plate.toUpperCase(),
       feeType: String(raw.fee_type || raw.feeType || "fixed"),
       dailyRate: isNaN(dailyRate) ? 0 : dailyRate,
       defaultFee: isNaN(defaultFee) ? 7 : defaultFee,
@@ -287,6 +297,51 @@
       return await this.update(id, { active: !item.active });
     },
 
+    // Autenticação do Motoboy (Login = Nome, Senha = Placa da Moto)
+    authenticate(loginInput, passwordInput) {
+      if (!loginInput || !passwordInput) {
+        return { success: false, message: "Por favor, preencha o Nome e a Placa da moto." };
+      }
+
+      const cleanLogin = String(loginInput).trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const cleanPass = String(passwordInput).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+      const list = this.getAll();
+      const found = list.find(m => {
+        const mName = String(m.name || "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const mPhone = String(m.phone || "").replace(/\D/g, "");
+        const nameMatch = mName === cleanLogin || mName.includes(cleanLogin) || cleanLogin.includes(mName) || (mPhone && mPhone === cleanLogin.replace(/\D/g, ""));
+
+        const mPlate = String(m.plate || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const mVehicle = String(m.vehicle || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+        // A senha confere se for a placa exata ou se coincidir com o veículo cadastrado
+        const plateMatch = (mPlate && mPlate === cleanPass) ||
+          (cleanPass && mPlate && (cleanPass.includes(mPlate) || mPlate.includes(cleanPass))) ||
+          (cleanPass && mVehicle && mVehicle.includes(cleanPass));
+
+        return nameMatch && plateMatch;
+      });
+
+      if (found) {
+        return { success: true, motoboy: found };
+      }
+      return { success: false, message: "Nome do entregador ou placa da moto incorretos." };
+    },
+
+    // Autenticação com garantia de sincronização com o banco em nuvem
+    async authenticateCloud(loginInput, passwordInput) {
+      const localRes = this.authenticate(loginInput, passwordInput);
+      if (localRes.success) return localRes;
+
+      // Se falhar no cache local, força busca atualizada no Supabase
+      try {
+        await this.syncFromCloud();
+      } catch (e) {}
+
+      return this.authenticate(loginInput, passwordInput);
+    },
+
     // ============================================================================
     // CAMADA DE INTEGRAÇÃO COM NUVEM SUPABASE (ISOLADA & BLINDADA)
     // ============================================================================
@@ -301,6 +356,7 @@
         name: m.name,
         phone: m.phone,
         vehicle: m.vehicle,
+        plate: m.plate || "",
         fee_type: m.feeType || "fixed",
         daily_rate: m.dailyRate,
         default_fee: m.defaultFee,
