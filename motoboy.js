@@ -47,11 +47,27 @@
     await loadActiveOrder();
 
     // 4. Inicializa o mapa Leaflet
-    initLeafletMap();
+    await initLeafletMap();
 
     // 5. Inicia o transmissor de GPS
     startGpsTracking();
   });
+
+  function normalizeOrder(raw) {
+    if (!raw) return null;
+    return {
+      ...raw,
+      id: String(raw.id || raw.order_id || ""),
+      orderId: String(raw.order_id || raw.id || ""),
+      deliveryMan: raw.deliveryMan || raw.delivery_man || null,
+      deliveryCoords: raw.deliveryCoords || raw.delivery_coords || null,
+      customer: raw.customer || {},
+      paymentMethod: raw.paymentMethod || raw.payment_method || "Não informado",
+      cashChangeFor: raw.cashChangeFor || raw.cash_change_for || null,
+      totalAmount: Number(raw.totalAmount ?? raw.total_amount ?? 0),
+      status: String(raw.status || "pronto").toLowerCase()
+    };
+  }
 
   // ============================================================================
   // 2. CARREGAMENTO DO MOTOBOY & PEDIDO
@@ -115,7 +131,7 @@
         if (sb) {
           try {
             const { data } = await sb.from("orders").select("*").eq("id", paramOrderId).maybeSingle();
-            if (data) order = data;
+            if (data) order = normalizeOrder(data);
           } catch (e) {}
         }
       }
@@ -126,13 +142,14 @@
       const allOrders = window.VIPDatabase.getOrders();
       order = allOrders.find(o =>
         o.fulfillment === "Entrega" &&
-        (o.status === "pronto" || o.status === "preparando") &&
-        o.deliveryMan &&
-        String(o.deliveryMan.id) === String(currentMotoboy.id)
+        (o.status === "pronto" || o.status === "preparando" || o.status === "em_preparo") &&
+        (o.deliveryMan || o.delivery_man) &&
+        String((o.deliveryMan?.id || o.delivery_man?.id)) === String(currentMotoboy.id)
       );
+      if (order) order = normalizeOrder(order);
     }
 
-    currentOrder = order;
+    currentOrder = order ? normalizeOrder(order) : null;
     renderOrderView();
   }
 
@@ -140,7 +157,12 @@
     const activeView = document.getElementById("active-order-view");
     const emptyView = document.getElementById("empty-state-view");
 
-    if (!currentOrder || currentOrder.status === "finalizado" || currentOrder.status === "cancelado") {
+    const isEnded = !currentOrder ||
+      currentOrder.status === "finalizado" ||
+      currentOrder.status === "concluido" ||
+      currentOrder.status === "cancelado";
+
+    if (isEnded) {
       if (activeView) activeView.style.display = "none";
       if (emptyView) emptyView.style.display = "block";
       const waLojaEmpty = document.getElementById("link-wa-loja-empty");
@@ -199,7 +221,7 @@
   // ============================================================================
   // 3. MAPA LEAFLET & ROTA AUTOMÁTICA / MANUAL
   // ============================================================================
-  function initLeafletMap() {
+  async function initLeafletMap() {
     const mapEl = document.getElementById("motoboy-live-map");
     if (!mapEl || leafletMap) return;
 
@@ -233,7 +255,7 @@
     leafletMap.on("click", onMapClickManualRoute);
 
     // Geocodifica e adiciona marcador do destino do cliente
-    resolveDestinationCoords();
+    await resolveDestinationCoords();
   }
 
   async function resolveDestinationCoords() {
@@ -262,6 +284,11 @@
     }
 
     destinationCoords = { lat: destLat, lng: destLng };
+
+    // Sincroniza destino na sessão ativa do transmissor
+    if (window.VIPMotoboyTracker && typeof window.VIPMotoboyTracker.updateSessionDestination === "function") {
+      window.VIPMotoboyTracker.updateSessionDestination(destinationCoords, currentOrder.customer?.address);
+    }
 
     // Atualiza links Waze e Google Maps
     updateExternalNavLinks(destLat, destLng, currentOrder.customer?.address);
@@ -503,9 +530,9 @@
 
     const orderId = currentOrder.id;
 
-    // 1. Atualiza status do pedido para 'finalizado' no banco de dados
+    // 1. Atualiza status do pedido para 'concluido' no banco de dados e nuvem
     if (window.VIPDatabase && typeof window.VIPDatabase.updateOrderStatus === "function") {
-      window.VIPDatabase.updateOrderStatus(orderId, "finalizado");
+      window.VIPDatabase.updateOrderStatus(orderId, "concluido");
     }
 
     // 2. Encerra a transmissão do motoboy e libera o status

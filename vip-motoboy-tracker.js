@@ -78,6 +78,7 @@
     // 1. TRANSMISSOR GPS (EXECUTADO NO APP DO MOTOBOY)
     // ==========================================================================
     _watchId: null,
+    _heartbeatIntervalId: null,
     _lastPublishedLat: null,
     _lastPublishedLng: null,
     _lastPublishedTime: 0,
@@ -97,10 +98,11 @@
       this.stopTransmitter();
       this._activeTrackingSession = { ...opts, waypoints: opts.waypoints || [] };
 
-      const minIntervalMs = 5000; // Throttle de 5 segundos
-      const minDistanceMeters = 8; // Mínimo de 8 metros de deslocamento
+      const minIntervalMs = 2000; // Resposta ultrarrápida (2 segundos)
+      const minDistanceMeters = 3; // Mínimo de 3 metros de deslocamento
 
       const handlePosition = async (pos) => {
+        if (!pos || !pos.coords) return;
         const coords = pos.coords;
         const lat = Number(coords.latitude.toFixed(6));
         const lng = Number(coords.longitude.toFixed(6));
@@ -111,7 +113,7 @@
         if (heading === null || isNaN(heading) || heading < 0) {
           if (this._lastPublishedLat !== null && this._lastPublishedLng !== null) {
             const dist = haversineDistance(this._lastPublishedLat, this._lastPublishedLng, lat, lng) * 1000;
-            if (dist > 3) {
+            if (dist > 2) {
               heading = calculateBearing(this._lastPublishedLat, this._lastPublishedLng, lat, lng);
               this._currentHeading = heading;
             } else {
@@ -130,34 +132,35 @@
           speedKmH = Math.round(coords.speed * 3.6);
         }
 
-        // Verifica throttle de tempo e distância para poupar bateria e dados
+        // Verifica throttle de tempo e distância
         const timeDiff = now - this._lastPublishedTime;
         let distDiff = 999;
         if (this._lastPublishedLat !== null && this._lastPublishedLng !== null) {
           distDiff = haversineDistance(this._lastPublishedLat, this._lastPublishedLng, lat, lng) * 1000;
         }
 
-        // Publica imediatamente se passou o tempo mínimo e houve movimento, ou se é a 1ª vez
-        if (this._lastPublishedTime === 0 || (timeDiff >= minIntervalMs && (distDiff >= minDistanceMeters || timeDiff >= 15000))) {
+        // Publica imediatamente se passou o tempo mínimo e houve movimento, ou heartbeat estático a cada 4s
+        if (this._lastPublishedTime === 0 || (timeDiff >= minIntervalMs && (distDiff >= minDistanceMeters || timeDiff >= 4000))) {
           this._lastPublishedLat = lat;
           this._lastPublishedLng = lng;
           this._lastPublishedTime = now;
 
+          const session = this._activeTrackingSession || opts;
           const payload = {
-            motoboy_id: opts.motoboyId,
-            order_id: opts.orderId || null,
-            motoboy_name: opts.motoboyName || "Entregador",
-            phone: opts.phone || "",
+            motoboy_id: String(session.motoboyId),
+            order_id: session.orderId ? String(session.orderId) : null,
+            motoboy_name: session.motoboyName || "Entregador",
+            phone: session.phone || "",
             latitude: lat,
             longitude: lng,
             heading: Math.round(heading),
             speed: speedKmH,
             accuracy: Math.round(coords.accuracy || 0),
-            route_waypoints: this._activeTrackingSession?.waypoints || [],
-            destination_lat: opts.destLat || null,
-            destination_lng: opts.destLng || null,
-            destination_address: opts.destAddress || null,
-            status: opts.orderId ? "em_rota" : "disponivel",
+            route_waypoints: session.waypoints || [],
+            destination_lat: session.destLat || null,
+            destination_lng: session.destLng || null,
+            destination_address: session.destAddress || null,
+            status: session.orderId ? "em_rota" : "disponivel",
             active: true,
             last_ping: now,
             updated_at: new Date().toISOString()
@@ -166,19 +169,19 @@
           // 1. Grava no Supabase Nuvem
           const sb = getSupabase();
           if (sb) {
-            try {
-              await sb.from("motoboy_locations").upsert(payload, { onConflict: "motoboy_id" });
-            } catch (err) {
+            sb.from("motoboy_locations").upsert(payload, { onConflict: "motoboy_id" }).then(({ error }) => {
+              if (error) console.warn("[VIPMotoboyTracker] Erro upsert GPS:", error);
+            }).catch(err => {
               console.warn("[VIPMotoboyTracker] Falha no upsert da localização no Supabase:", err);
-            }
+            });
           }
 
-          // 2. Transmite via BroadcastChannel para abas locais
+          // 2. Transmite via BroadcastChannel para abas locais instantaneamente
           broadcastMessage("MOTOBOY_LOCATION_UPDATE", payload);
 
           // 3. Salva no LocalStorage para persistência instantânea
           try {
-            localStorage.setItem(`salgados_vip_motoboy_loc_${opts.motoboyId}`, JSON.stringify(payload));
+            localStorage.setItem(`salgados_vip_motoboy_loc_${session.motoboyId}`, JSON.stringify(payload));
           } catch (e) {}
 
           if (opts.onUpdate) {
@@ -188,23 +191,69 @@
       };
 
       const handleError = (err) => {
-        console.warn("[VIPMotoboyTracker] Erro ao obter GPS:", err.message);
+        console.warn("[VIPMotoboyTracker] Aviso ao obter GPS:", err.message);
         if (opts.onError) opts.onError(err);
+
+        // Se falhou com alta precisão, tenta obter sem highAccuracy para não ficar sem sinal
+        if (err.code === 2 || err.code === 3) {
+          navigator.geolocation.getCurrentPosition(handlePosition, () => {}, {
+            enableHighAccuracy: false,
+            timeout: 5000,
+            maximumAge: 10000
+          });
+        }
       };
 
       const geoOptions = {
         enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 3000
+        timeout: 8000,
+        maximumAge: 2000
       };
 
-      // Watch contínuo
+      // Watch contínuo de alta precisão
       this._watchId = navigator.geolocation.watchPosition(handlePosition, handleError, geoOptions);
 
       // Leitura imediata para não esperar o primeiro ciclo
       navigator.geolocation.getCurrentPosition(handlePosition, handleError, geoOptions);
 
+      // Heartbeat preventivo para manter o sinal ativo mesmo se a aba estiver em segundo plano
+      this._heartbeatIntervalId = setInterval(() => {
+        if (this._activeTrackingSession) {
+          navigator.geolocation.getCurrentPosition(handlePosition, handleError, {
+            enableHighAccuracy: true,
+            timeout: 6000,
+            maximumAge: 3000
+          });
+        }
+      }, 4000);
+
       return true;
+    },
+
+    /**
+     * Atualiza as coordenadas e endereço de destino na sessão ativa
+     */
+    updateSessionDestination(destCoords, destAddress) {
+      if (!this._activeTrackingSession) return;
+      if (destCoords && destCoords.lat) {
+        this._activeTrackingSession.destLat = destCoords.lat;
+        this._activeTrackingSession.destLng = destCoords.lng;
+      }
+      if (destAddress) {
+        this._activeTrackingSession.destAddress = destAddress;
+      }
+      // Se já temos a última posição, envia o destino atualizado ao Supabase
+      if (this._lastPublishedLat !== null && this._lastPublishedLng !== null) {
+        const sb = getSupabase();
+        if (sb && this._activeTrackingSession.motoboyId) {
+          sb.from("motoboy_locations").update({
+            destination_lat: this._activeTrackingSession.destLat || null,
+            destination_lng: this._activeTrackingSession.destLng || null,
+            destination_address: this._activeTrackingSession.destAddress || null,
+            updated_at: new Date().toISOString()
+          }).eq("motoboy_id", String(this._activeTrackingSession.motoboyId)).then(() => {}).catch(() => {});
+        }
+      }
     },
 
     /**
@@ -221,7 +270,7 @@
           await sb.from("motoboy_locations").update({
             route_waypoints: this._activeTrackingSession.waypoints,
             updated_at: new Date().toISOString()
-          }).eq("motoboy_id", motoboyId);
+          }).eq("motoboy_id", String(motoboyId));
         } catch (e) {}
       }
     },
@@ -234,6 +283,10 @@
         navigator.geolocation.clearWatch(this._watchId);
         this._watchId = null;
       }
+      if (this._heartbeatIntervalId !== null) {
+        clearInterval(this._heartbeatIntervalId);
+        this._heartbeatIntervalId = null;
+      }
 
       if (this._activeTrackingSession) {
         const motoboyId = this._activeTrackingSession.motoboyId;
@@ -245,7 +298,7 @@
               order_id: null,
               active: false,
               updated_at: new Date().toISOString()
-            }).eq("motoboy_id", motoboyId);
+            }).eq("motoboy_id", String(motoboyId));
           } catch (e) {}
         }
         this._activeTrackingSession = null;
@@ -280,7 +333,10 @@
 
       try {
         const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${coordsString}?overview=full&geometries=geojson&steps=false`;
-        const resp = await fetch(osrmUrl, { method: "GET" });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500); // 2.5s limite para não travar o mapa
+        const resp = await fetch(osrmUrl, { method: "GET", signal: controller.signal });
+        clearTimeout(timeoutId);
 
         if (resp.ok) {
           const data = await resp.json();
@@ -304,7 +360,7 @@
           }
         }
       } catch (e) {
-        console.warn("[VIPMotoboyTracker] Falha no cálculo OSRM, gerando rota interpolada:", e);
+        console.warn("[VIPMotoboyTracker] Falha no cálculo OSRM, gerando rota interpolada instantânea:", e.message || e);
       }
 
       // Fallback em caso de indisponibilidade do OSRM: interpolação direta com fator de via 1.28x
@@ -352,7 +408,10 @@
 
       try {
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1&countrycodes=br`;
-        const resp = await fetch(url, { headers: { "Accept": "application/json" } });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2500);
+        const resp = await fetch(url, { headers: { "Accept": "application/json" }, signal: controller.signal });
+        clearTimeout(timeoutId);
         if (resp.ok) {
           const list = await resp.json();
           if (list && list.length > 0) {
@@ -387,6 +446,7 @@
         return { unsubscribe: () => {} };
       }
 
+      const cleanMbId = String(motoboyId);
       let isCleanedUp = false;
       let pollInterval = null;
       let realtimeChannel = null;
@@ -400,7 +460,7 @@
             const { data, error } = await sb
               .from("motoboy_locations")
               .select("*")
-              .eq("motoboy_id", motoboyId)
+              .eq("motoboy_id", cleanMbId)
               .maybeSingle();
 
             if (!error && data && !isCleanedUp) {
@@ -412,7 +472,7 @@
 
         // Fallback localstorage
         try {
-          const cached = localStorage.getItem(`salgados_vip_motoboy_loc_${motoboyId}`);
+          const cached = localStorage.getItem(`salgados_vip_motoboy_loc_${cleanMbId}`);
           if (cached && !isCleanedUp) {
             callback(JSON.parse(cached));
           }
@@ -424,16 +484,16 @@
       // 2. Supabase Realtime Listener (Reativo Instantâneo)
       const sb = getSupabase();
       if (sb && typeof sb.channel === "function") {
-        const channelName = `motoboy-loc-${motoboyId}-${Date.now()}`;
+        const channelName = `mb-loc-${cleanMbId}-${Date.now()}`;
         realtimeChannel = sb.channel(channelName)
           .on("postgres_changes", {
             event: "*",
             schema: "public",
             table: "motoboy_locations",
-            filter: `motoboy_id=eq.${motoboyId}`
+            filter: `motoboy_id=eq.${cleanMbId}`
           }, (payload) => {
             if (isCleanedUp) return;
-            if (payload && payload.new) {
+            if (payload && payload.new && payload.new.latitude) {
               callback(payload.new);
             }
           })
@@ -445,7 +505,7 @@
         if (isCleanedUp) return;
         if (evt.data && evt.data.type === "MOTOBOY_LOCATION_UPDATE") {
           const data = evt.data.payload;
-          if (data && data.motoboy_id === motoboyId) {
+          if (data && String(data.motoboy_id) === cleanMbId) {
             callback(data);
           }
         }
@@ -459,8 +519,8 @@
         }
       } catch (e) {}
 
-      // 4. Polling Suave de Fallback (a cada 6 segundos)
-      pollInterval = setInterval(fetchLatest, 6000);
+      // 4. Polling Suave e Rápido de Fallback (a cada 2 segundos)
+      pollInterval = setInterval(fetchLatest, 2000);
 
       return {
         unsubscribe: () => {
@@ -473,6 +533,55 @@
           if (realtimeChannel && sb) {
             sb.removeChannel(realtimeChannel);
           }
+        }
+      };
+    },
+
+    /**
+     * Escuta a localização da entrega por Pedido ou Motoboy
+     * @param {string} orderId ID do pedido
+     * @param {string} motoboyId ID do motoboy (opcional)
+     * @param {Function} callback Callback com a localização
+     */
+    subscribeOrderDeliveryLocation(orderId, motoboyId, callback) {
+      if (motoboyId) {
+        return this.subscribeMotoboyLocation(motoboyId, callback);
+      }
+
+      let sub = null;
+      let isCleanedUp = false;
+      const cleanOrderId = String(orderId);
+
+      const findAndSubscribe = async () => {
+        if (isCleanedUp) return;
+        const sb = getSupabase();
+        if (sb) {
+          try {
+            const { data } = await sb
+              .from("motoboy_locations")
+              .select("*")
+              .eq("order_id", cleanOrderId)
+              .maybeSingle();
+
+            if (data && data.motoboy_id && !isCleanedUp) {
+              if (sub) sub.unsubscribe();
+              sub = this.subscribeMotoboyLocation(data.motoboy_id, callback);
+              return;
+            }
+          } catch (e) {}
+        }
+      };
+
+      findAndSubscribe();
+      const checkTimer = setInterval(() => {
+        if (!sub && !isCleanedUp) findAndSubscribe();
+      }, 3000);
+
+      return {
+        unsubscribe: () => {
+          isCleanedUp = true;
+          clearInterval(checkTimer);
+          if (sub) sub.unsubscribe();
         }
       };
     },
@@ -537,7 +646,8 @@
         }
       } catch (e) {}
 
-      pollInterval = setInterval(fetchAll, 7000);
+      // Polling de 2.5 segundos para atualização suave do radar da loja
+      pollInterval = setInterval(fetchAll, 2500);
 
       return {
         unsubscribe: () => {

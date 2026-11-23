@@ -1,10 +1,10 @@
 /**
  * ==============================================================================
- * SALGADOS VIP - ACOMPANHAMENTO DE PEDIDOS & RADAR DO CLIENTE (v65.0)
+ * SALGADOS VIP - ACOMPANHAMENTO DE PEDIDOS & RADAR DO CLIENTE (v66.0)
  * ==============================================================================
- * Módulo para visualização intuitiva e em tempo real do status do pedido,
- * radar com mapa Leaflet do motoboy se aproximando, e botão flutuante de
- * fácil retorno à tela de acompanhamento caso o cliente feche o card.
+ * Módulo para visualização ultra-rápida e em tempo real do status do pedido,
+ * radar com mapa Leaflet do motoboy se aproximando, sincronização instantânea
+ * via Supabase Realtime + BroadcastChannel e botão flutuante de retorno fácil.
  * ==============================================================================
  */
 
@@ -15,13 +15,17 @@
 
   let _activeOrderId = null;
   let _activeOrder = null;
+  let _orderRealtimeChannel = null;
   let _motoboySubscription = null;
   let _customerMap = null;
   let _customerMotoboyMarker = null;
   let _customerStoreMarker = null;
   let _customerDestMarker = null;
   let _customerRoutePolyline = null;
+  let _hasFitRouteBounds = false;
   let _pollTimer = null;
+  let _lastRouteCalcTime = 0;
+  let _lastRouteCalcCoords = null;
 
   function getSupabase() {
     if (typeof window !== "undefined" && window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function") {
@@ -34,7 +38,59 @@
     return null;
   }
 
+  // Cálculo geodésico Haversine (em metros)
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371e3;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
   const VIPCustomerTracker = {
+    /**
+     * Normaliza os diferentes identificadores de status para as etapas visuais
+     */
+    normalizeStatus(st) {
+      const s = String(st || "").toLowerCase().trim();
+      if (s === "em_preparo" || s === "preparando" || s === "cozinha") return "preparando";
+      if (s === "pronto" || s === "despachado" || s === "em_rota" || s === "saiu_para_entrega") return "pronto";
+      if (s === "concluido" || s === "finalizado" || s === "entregue") return "finalizado";
+      if (s === "cancelado") return "cancelado";
+      return "novo";
+    },
+
+    /**
+     * Padroniza o objeto de pedido do Supabase ou LocalStorage
+     */
+    normalizeOrderData(raw) {
+      if (!raw) return null;
+      const id = String(raw.id || raw.order_id || "");
+      const normStatus = this.normalizeStatus(raw.status);
+
+      return {
+        ...raw,
+        id,
+        orderId: id,
+        rawStatus: raw.status || "novo",
+        status: normStatus,
+        deliveryMan: raw.deliveryMan || raw.delivery_man || null,
+        deliveryCoords: raw.deliveryCoords || raw.delivery_coords || null,
+        customer: raw.customer || {},
+        items: raw.items || [],
+        totalAmount: Number(raw.totalAmount ?? raw.total_amount ?? raw.total ?? 0),
+        subtotal: Number(raw.subtotal || 0),
+        deliveryFee: Number(raw.deliveryFee ?? raw.delivery_fee ?? 0),
+        paymentMethod: raw.paymentMethod || raw.payment_method || "Não informado",
+        cashChangeFor: raw.cashChangeFor || raw.cash_change_for || null,
+        fulfillment: raw.fulfillment || "Entrega",
+        createdAt: Number(raw.createdAt || raw.created_at || Date.now())
+      };
+    },
+
     /**
      * Inicializa o rastreador no app do cliente
      */
@@ -48,27 +104,123 @@
       if (!_activeOrderId && window.VIPDatabase && typeof window.VIPDatabase.getCustomerLastOrder === "function") {
         const last = window.VIPDatabase.getCustomerLastOrder();
         if (last && last.id && (Date.now() - (last.createdAt || 0) < 18 * 60 * 60 * 1000)) {
-          _activeOrderId = last.id;
+          _activeOrderId = String(last.id);
         }
       }
 
-      // 3. Atualiza estado e interface
+      // 3. Atualiza estado e interface com prioridade
       await this.refreshActiveOrder();
 
-      // 4. Polling suave de atualização de status (a cada 6 segundos)
+      // 4. Inicia escuta Realtime do Supabase no pedido ativo
+      if (_activeOrderId) {
+        this.subscribeActiveOrderRealtime(_activeOrderId);
+      }
+
+      // 5. Polling suave e rápido de atualização de status (a cada 2.5 segundos)
       if (_pollTimer) clearInterval(_pollTimer);
       _pollTimer = setInterval(() => {
         if (_activeOrderId) {
           this.refreshActiveOrder(false);
         }
-      }, 6000);
+      }, 2500);
 
-      // 5. Escuta evento de sincronização do Supabase
+      // 6. Escuta eventos customizados disparados por outras partes da aplicação
+      window.addEventListener("vip_orders_updated", (evt) => {
+        if (_activeOrderId && evt.detail && evt.detail.order) {
+          const ord = evt.detail.order;
+          if (String(ord.id) === String(_activeOrderId) || String(ord.orderId) === String(_activeOrderId)) {
+            this.handleDirectOrderUpdate(ord);
+          }
+        }
+      });
+
       window.addEventListener("vip_supabase_synced", () => {
         if (_activeOrderId) {
           this.refreshActiveOrder(false);
         }
       });
+
+      // 7. Escuta mensagens locais via BroadcastChannel (comunicação inter-abas)
+      try {
+        if (typeof BroadcastChannel !== "undefined") {
+          const bc = new BroadcastChannel("salgados_vip_bus");
+          bc.addEventListener("message", (evt) => {
+            if (evt.data && evt.data.type === "ORDER_UPDATED" && _activeOrderId) {
+              const payload = evt.data.payload;
+              if (payload && (String(payload.id) === String(_activeOrderId) || String(payload.orderId) === String(_activeOrderId))) {
+                this.handleDirectOrderUpdate(payload);
+              }
+            }
+          });
+        }
+      } catch (e) {}
+    },
+
+    /**
+     * Inscreve canal Supabase Realtime dedicado para o pedido ativo do cliente
+     */
+    subscribeActiveOrderRealtime(orderId) {
+      if (!orderId) return;
+      const sb = getSupabase();
+      if (!sb || typeof sb.channel !== "function") return;
+
+      if (_orderRealtimeChannel) {
+        try { sb.removeChannel(_orderRealtimeChannel); } catch (e) {}
+        _orderRealtimeChannel = null;
+      }
+
+      try {
+        const cleanId = String(orderId);
+        _orderRealtimeChannel = sb.channel(`cust-order-${cleanId}-${Date.now()}`)
+          .on("postgres_changes", {
+            event: "*",
+            schema: "public",
+            table: "orders",
+            filter: `id=eq.${cleanId}`
+          }, (payload) => {
+            if (payload && payload.new) {
+              this.handleDirectOrderUpdate(payload.new);
+            }
+          })
+          .subscribe();
+      } catch (e) {
+        console.warn("[VIPCustomerTracker] Erro ao assinar realtime de pedidos:", e);
+      }
+    },
+
+    /**
+     * Manipula atualização direta de dados do pedido ativo recebida via Realtime ou Broadcast
+     */
+    handleDirectOrderUpdate(updatedRaw) {
+      if (!updatedRaw) return;
+      const prevStatus = _activeOrder?.status;
+      const norm = this.normalizeOrderData(updatedRaw);
+
+      // Preserva itens do pedido se a mensagem contiver apenas status
+      if ((!norm.items || norm.items.length === 0) && _activeOrder?.items) {
+        norm.items = _activeOrder.items;
+      }
+      if (!norm.customer?.name && _activeOrder?.customer?.name) {
+        norm.customer = _activeOrder.customer;
+      }
+
+      _activeOrder = norm;
+
+      // Atualiza no cache do banco local
+      if (window.VIPDatabase && typeof window.VIPDatabase.updateOrder === "function") {
+        try { window.VIPDatabase.updateOrder(norm); } catch (e) {}
+      }
+
+      this.renderFloatingButton();
+      this.renderTrackingModalContent();
+
+      // Se mudou para 'pronto' e é entrega, inicializa o mapa do radar imediatamente
+      if (norm.status === "pronto" && norm.fulfillment === "Entrega") {
+        const modal = document.getElementById("customer-track-modal");
+        if (modal && modal.classList.contains("active")) {
+          this.initOrUpdateRadarMap();
+        }
+      }
     },
 
     /**
@@ -78,16 +230,18 @@
     async setActiveOrder(orderId) {
       if (!orderId) return;
       _activeOrderId = String(orderId);
+      _hasFitRouteBounds = false;
       try {
         localStorage.setItem(STORAGE_KEY_ACTIVE_ORDER, _activeOrderId);
       } catch (e) {}
 
+      this.subscribeActiveOrderRealtime(_activeOrderId);
       await this.refreshActiveOrder(true);
       this.openTrackingModal();
     },
 
     /**
-     * Atualiza os dados do pedido ativo do banco local ou Supabase
+     * Atualiza os dados do pedido ativo consultando imediatamente Supabase e banco local
      */
     async refreshActiveOrder(shouldOpenModalOnFirstLoad = false) {
       if (!_activeOrderId) {
@@ -97,28 +251,40 @@
 
       let order = null;
 
-      // 1. Busca em memória no VIPDatabase
+      // 1. Busca imediata em memória no VIPDatabase para resposta sem delay
       if (window.VIPDatabase && typeof window.VIPDatabase.getOrders === "function") {
         const orders = window.VIPDatabase.getOrders();
-        order = orders.find(o => String(o.id) === String(_activeOrderId));
+        const found = orders.find(o => String(o.id) === String(_activeOrderId) || String(o.orderId) === String(_activeOrderId));
+        if (found) {
+          order = this.normalizeOrderData(found);
+        }
       }
 
-      // 2. Se não encontrou, busca no Supabase
-      if (!order) {
-        const sb = getSupabase();
-        if (sb) {
-          try {
-            const { data } = await sb.from("orders").select("*").eq("id", _activeOrderId).maybeSingle();
-            if (data) order = data;
-          } catch (e) {}
-        }
+      // 2. Consulta direta ao Supabase para garantir status 100% fresco da nuvem
+      const sb = getSupabase();
+      if (sb) {
+        try {
+          const { data, error } = await sb
+            .from("orders")
+            .select("*")
+            .eq("id", _activeOrderId)
+            .maybeSingle();
+
+          if (!error && data) {
+            order = this.normalizeOrderData(data);
+            // Sincroniza de volta no banco local
+            if (window.VIPDatabase && typeof window.VIPDatabase.updateOrder === "function") {
+              try { window.VIPDatabase.updateOrder(order); } catch (e) {}
+            }
+          }
+        } catch (e) {}
       }
 
       if (!order) {
         return;
       }
 
-      // Se o pedido já foi finalizado há mais de 30 minutos ou cancelado, remove status ativo
+      // Se o pedido já foi finalizado há mais de 45 minutos ou cancelado, remove status ativo
       const isDelivered = (order.status === "finalizado");
       const isCancelled = (order.status === "cancelado");
       const orderAgeMs = Date.now() - (order.createdAt || 0);
@@ -145,11 +311,21 @@
     clearActiveOrder() {
       _activeOrderId = null;
       _activeOrder = null;
+      _hasFitRouteBounds = false;
       try {
         localStorage.removeItem(STORAGE_KEY_ACTIVE_ORDER);
       } catch (e) {}
       this.hideFloatingButton();
       this.closeTrackingModal();
+
+      if (_orderRealtimeChannel) {
+        const sb = getSupabase();
+        if (sb) {
+          try { sb.removeChannel(_orderRealtimeChannel); } catch (e) {}
+        }
+        _orderRealtimeChannel = null;
+      }
+
       if (_motoboySubscription) {
         _motoboySubscription.unsubscribe();
         _motoboySubscription = null;
@@ -169,16 +345,18 @@
       let statusText = "Em andamento";
       let pulseColor = "#f59e0b";
 
-      if (_activeOrder.status === "novo") {
+      const curStatus = _activeOrder.status;
+
+      if (curStatus === "novo") {
         statusText = "Recebido na Cozinha";
         pulseColor = "#38bdf8";
-      } else if (_activeOrder.status === "preparando") {
+      } else if (curStatus === "preparando") {
         statusText = "Fritando seus Salgadinhos";
         pulseColor = "#f59e0b";
-      } else if (_activeOrder.status === "pronto") {
+      } else if (curStatus === "pronto") {
         statusText = _activeOrder.fulfillment === "Entrega" ? "🛵 Motoboy a Caminho!" : "Pronto para Retirada!";
         pulseColor = "#10b981";
-      } else if (_activeOrder.status === "finalizado") {
+      } else if (curStatus === "finalizado") {
         statusText = "🎉 Pedido Entregue!";
         pulseColor = "#10b981";
       }
@@ -269,8 +447,9 @@
       const descBox = document.getElementById("track-status-description-box");
       const radarSection = document.getElementById("track-radar-section");
       const motoboyInfoCard = document.getElementById("track-motoboy-info-card");
+      const curStatus = order.status;
 
-      if (order.status === "novo") {
+      if (curStatus === "novo") {
         stNovo?.classList.add("current");
         if (descBox) {
           descBox.innerHTML = `
@@ -280,7 +459,7 @@
         }
         if (radarSection) radarSection.style.display = "none";
         if (motoboyInfoCard) motoboyInfoCard.style.display = "none";
-      } else if (order.status === "preparando") {
+      } else if (curStatus === "preparando") {
         stNovo?.classList.add("completed");
         stPrep?.classList.add("current");
         if (descBox) {
@@ -291,14 +470,15 @@
         }
         if (radarSection) radarSection.style.display = "none";
         if (motoboyInfoCard) motoboyInfoCard.style.display = "none";
-      } else if (order.status === "pronto") {
+      } else if (curStatus === "pronto") {
         stNovo?.classList.add("completed");
         stPrep?.classList.add("completed");
         stPronto?.classList.add("current");
 
         if (order.fulfillment === "Entrega") {
-          const mbName = order.deliveryMan?.name || "Entregador VIP";
-          const mbVehicle = order.deliveryMan?.vehicle || "Moto";
+          const mb = order.deliveryMan;
+          const mbName = mb?.name || "Entregador VIP";
+          const mbVehicle = mb?.vehicle || "Moto";
           if (descBox) {
             descBox.innerHTML = `
               <div class="track-desc-title"><i class="fa-solid fa-motorcycle" style="color: #10b981;"></i> Motoboy a Caminho da sua Residência!</div>
@@ -334,7 +514,7 @@
           if (radarSection) radarSection.style.display = "none";
           if (motoboyInfoCard) motoboyInfoCard.style.display = "none";
         }
-      } else if (order.status === "finalizado") {
+      } else if (curStatus === "finalizado") {
         stNovo?.classList.add("completed");
         stPrep?.classList.add("completed");
         stPronto?.classList.add("completed");
@@ -449,14 +629,14 @@
         _customerDestMarker.setLatLng([destLat, destLng]);
       }
 
-      // Conecta ao transmissor do motoboy
-      const motoboyId = _activeOrder.deliveryMan?.id;
-      if (motoboyId && window.VIPMotoboyTracker) {
+      // Conecta ao transmissor do motoboy usando subscribeOrderDeliveryLocation
+      const motoboyId = _activeOrder.deliveryMan?.id || _activeOrder.delivery_man?.id;
+      if (window.VIPMotoboyTracker) {
         if (_motoboySubscription) {
           _motoboySubscription.unsubscribe();
         }
 
-        _motoboySubscription = window.VIPMotoboyTracker.subscribeMotoboyLocation(motoboyId, (locData) => {
+        _motoboySubscription = window.VIPMotoboyTracker.subscribeOrderDeliveryLocation(_activeOrderId, motoboyId, (locData) => {
           if (!locData || !locData.latitude) return;
           this.updateCustomerMotoboyPosition(locData, { lat: destLat, lng: destLng });
         });
@@ -464,7 +644,7 @@
     },
 
     /**
-     * Atualiza a posição da moto no mapa do cliente e traça a rota
+     * Atualiza a posição da moto no mapa do cliente com suavidade e sem travar a interface
      */
     async updateCustomerMotoboyPosition(locData, destCoords) {
       if (!_customerMap || !locData) return;
@@ -473,15 +653,15 @@
       const lng = locData.longitude;
       const heading = locData.heading || 0;
 
-      // Marcador de Moto
+      // 1. Move o marcador de moto instantaneamente
       const bikeHtml = `<div class="bike-icon-inner" style="transform: rotate(${heading}deg);"><i class="fa-solid fa-motorcycle"></i></div>`;
 
       if (!_customerMotoboyMarker) {
         const bikeIcon = L.divIcon({
           className: "motoboy-bike-marker",
           html: bikeHtml,
-          iconSize: [34, 34],
-          iconAnchor: [17, 17]
+          iconSize: [36, 36],
+          iconAnchor: [18, 18]
         });
         _customerMotoboyMarker = L.marker([lat, lng], { icon: bikeIcon }).addTo(_customerMap);
         _customerMotoboyMarker.bindPopup(`<strong>🛵 Seu Pedido está a caminho!</strong>`);
@@ -494,8 +674,15 @@
         }
       }
 
-      // Calcula trajeto até a residência do cliente
-      if (window.VIPMotoboyTracker && destCoords) {
+      // 2. Calcula ou atualiza o trajeto e ETA com desacoplamento inteligente
+      const now = Date.now();
+      const distFromLastCalc = _lastRouteCalcCoords ? haversineMeters(_lastRouteCalcCoords.lat, _lastRouteCalcCoords.lng, lat, lng) : 999;
+      const shouldRecalcRoute = (!_customerRoutePolyline || (now - _lastRouteCalcTime > 12000) || distFromLastCalc > 80);
+
+      if (window.VIPMotoboyTracker && destCoords && shouldRecalcRoute) {
+        _lastRouteCalcTime = now;
+        _lastRouteCalcCoords = { lat, lng };
+
         const waypoints = locData.route_waypoints || [];
         const routeData = await window.VIPMotoboyTracker.calculateRoute({ lat, lng }, destCoords, waypoints);
 
@@ -509,12 +696,25 @@
             dashArray: "8, 6"
           }).addTo(_customerMap);
 
-          _customerMap.fitBounds(_customerRoutePolyline.getBounds(), { padding: [30, 30] });
+          // Enquadra a rota no zoom apenas na primeira vez para não sacudir o mapa do cliente
+          if (!_hasFitRouteBounds) {
+            _customerMap.fitBounds(_customerRoutePolyline.getBounds(), { padding: [30, 30] });
+            _hasFitRouteBounds = true;
+          }
 
           const etaText = document.getElementById("customer-eta-text");
           if (etaText) {
             etaText.textContent = `Chegando em ~${routeData.durationMin} min (${routeData.distanceKm} km)`;
           }
+        }
+      } else if (destCoords && _lastRouteCalcCoords) {
+        // Atualiza a estimativa de distância restante de forma linear sem requisição OSRM
+        const remainingM = haversineMeters(lat, lng, destCoords.lat, destCoords.lng) * 1.25;
+        const remainingKm = Math.round((remainingM / 1000) * 10) / 10;
+        const estMin = Math.max(1, Math.round(remainingKm * 2.5));
+        const etaText = document.getElementById("customer-eta-text");
+        if (etaText && etaText.textContent.includes("Calculando")) {
+          etaText.textContent = `Chegando em ~${estMin} min (${remainingKm} km)`;
         }
       }
     }

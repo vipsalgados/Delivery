@@ -3142,6 +3142,9 @@ const VIPDatabase = {
         ...rowNew,
         id: rowNew.id || rowNew.order_id,
         orderId: rowNew.order_id || rowNew.id,
+        status: rowNew.status || "novo",
+        deliveryMan: rowNew.delivery_man || rowNew.deliveryMan || null,
+        deliveryCoords: rowNew.delivery_coords || rowNew.deliveryCoords || null,
         createdAt: parseInt(rowNew.created_at) || Date.now(),
         subtotal: parseFloat(rowNew.subtotal || 0),
         deliveryFee: parseFloat(rowNew.delivery_fee || 0),
@@ -3162,6 +3165,13 @@ const VIPDatabase = {
         localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
         window.dispatchEvent(new CustomEvent("vip_order_received", { detail: order }));
         window.dispatchEvent(new CustomEvent("vip_orders_updated", { detail: { order, event: "INSERT" } }));
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("salgados_vip_bus");
+            bc.postMessage({ type: "ORDER_UPDATED", payload: order, timestamp: Date.now() });
+            setTimeout(() => bc.close(), 100);
+          }
+        } catch (e) {}
       }
     } else if (eventType === "UPDATE") {
       const idx = orders.findIndex(o => (o.id === rowNew.id || o.orderId === rowNew.id));
@@ -3171,6 +3181,9 @@ const VIPDatabase = {
           ...rowNew,
           id: rowNew.id || rowNew.order_id,
           orderId: rowNew.order_id || rowNew.id,
+          status: rowNew.status || orders[idx].status,
+          deliveryMan: rowNew.delivery_man || rowNew.deliveryMan || orders[idx].deliveryMan || null,
+          deliveryCoords: rowNew.delivery_coords || rowNew.deliveryCoords || orders[idx].deliveryCoords || null,
           createdAt: parseInt(rowNew.created_at) || orders[idx].createdAt,
           subtotal: parseFloat(rowNew.subtotal ?? orders[idx].subtotal),
           deliveryFee: parseFloat(rowNew.delivery_fee ?? orders[idx].deliveryFee),
@@ -3186,6 +3199,13 @@ const VIPDatabase = {
         };
         localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(orders));
         window.dispatchEvent(new CustomEvent("vip_orders_updated", { detail: { order: orders[idx], event: "UPDATE" } }));
+        try {
+          if (typeof BroadcastChannel !== "undefined") {
+            const bc = new BroadcastChannel("salgados_vip_bus");
+            bc.postMessage({ type: "ORDER_UPDATED", payload: orders[idx], timestamp: Date.now() });
+            setTimeout(() => bc.close(), 100);
+          }
+        } catch (e) {}
       }
     } else if (eventType === "DELETE") {
       orders = orders.filter(o => o.id !== rowOld.id && o.orderId !== rowOld.id);
@@ -3336,7 +3356,6 @@ const VIPDatabase = {
 
   pushOrderStatusToSupabase(orderId, status, history, deliveryMan) {
     const sb = getSupabaseClient();
-    if (!sb) return;
     const updates = {
       status: status,
       history: history || []
@@ -3344,6 +3363,14 @@ const VIPDatabase = {
     if (deliveryMan !== undefined) {
       updates.delivery_man = deliveryMan;
     }
+    try {
+      if (typeof BroadcastChannel !== "undefined") {
+        const bc = new BroadcastChannel("salgados_vip_bus");
+        bc.postMessage({ type: "ORDER_UPDATED", payload: { id: orderId, status, deliveryMan }, timestamp: Date.now() });
+        setTimeout(() => bc.close(), 100);
+      }
+    } catch (e) {}
+    if (!sb) return;
     sb.from("orders").update(updates).eq("id", orderId).then(({ error }) => {
       if (error) console.warn("[Supabase] Erro ao atualizar status:", error);
     });
