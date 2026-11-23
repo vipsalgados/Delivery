@@ -9803,6 +9803,44 @@ window.confirmDispatchMotoboy = async function() {
   order.status = "pronto";
   VIPDatabase.updateOrderStatus(orderId, "pronto", { deliveryMan: order.deliveryMan });
 
+  // Inicializa o motoboy no radar GPS com localização inicial na loja (base)
+  if (motoboy) {
+    try {
+      const storeCoords = window.VIPMotoboyTracker?.STORE_COORDS || { lat: -22.75735, lng: -43.47254 };
+      const initLocPayload = {
+        motoboy_id: String(motoboy.id),
+        order_id: String(orderId),
+        motoboy_name: motoboy.name,
+        phone: motoboy.phone || "",
+        latitude: storeCoords.lat,
+        longitude: storeCoords.lng,
+        heading: 0,
+        speed: 0,
+        accuracy: 5,
+        route_waypoints: [],
+        status: "em_rota",
+        active: true,
+        last_ping: Date.now(),
+        updated_at: new Date().toISOString()
+      };
+
+      const sb = (window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function")
+        ? window.VIPDatabase.getSupabaseClient()
+        : null;
+      if (sb) {
+        sb.from("motoboy_locations").upsert(initLocPayload, { onConflict: "motoboy_id" }).catch(() => {});
+      }
+
+      if (typeof BroadcastChannel !== "undefined") {
+        const bc = new BroadcastChannel("salgados_vip_bus");
+        bc.postMessage({ type: "MOTOBOY_LOCATION_UPDATE", payload: initLocPayload, timestamp: Date.now() });
+        setTimeout(() => bc.close(), 100);
+      }
+    } catch (e) {
+      console.warn("[Despacho Motoboy] Falha ao registrar início de localização:", e);
+    }
+  }
+
   // Se o checkbox de WhatsApp estiver ativo, dispara mensagem para o motoboy
   if (sendWaCheckbox?.checked && motoboy && motoboy.phone) {
     const cleanPhone = motoboy.phone.replace(/\D/g, "");
@@ -10544,11 +10582,13 @@ window.initOrRenderFleetRadar = function() {
     fleetRadarMap = L.map("admin-fleet-radar-map", {
       center: [storeCoords.lat, storeCoords.lng],
       zoom: 14,
-      attributionControl: false
+      attributionControl: true
     });
 
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19
+    // Camada 100% gratuita via OpenStreetMap oficial (zero custo, sem exigência de API Key)
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors"
     }).addTo(fleetRadarMap);
 
     const storeIcon = L.divIcon({
@@ -10560,8 +10600,10 @@ window.initOrRenderFleetRadar = function() {
     fleetStoreMarker = L.marker([storeCoords.lat, storeCoords.lng], { icon: storeIcon })
       .bindPopup("<strong>🏠 Salgados VIP (Base/Cozinha)</strong><br>Rua Isabel Pedrosa, 31")
       .addTo(fleetRadarMap);
+
+    setTimeout(() => { if (fleetRadarMap) fleetRadarMap.invalidateSize(); }, 200);
   } else {
-    setTimeout(() => fleetRadarMap.invalidateSize(), 150);
+    setTimeout(() => { if (fleetRadarMap) fleetRadarMap.invalidateSize(); }, 150);
   }
 
   // Inicia escuta em tempo real de todos os motoboys via Supabase / Broadcast
@@ -10587,8 +10629,12 @@ function renderFleetRadarData(motoboyLocations) {
   if (!Array.isArray(motoboyLocations)) motoboyLocations = [];
 
   const now = Date.now();
-  // Filtra os que enviaram sinal nos últimos 30 minutos
-  const activeList = motoboyLocations.filter(loc => (now - (loc.last_ping || 0)) < 30 * 60 * 1000);
+  // Filtra motoboys que enviaram sinal recente ou estão marcados ativos (últimos 60 minutos)
+  const activeList = motoboyLocations.filter(loc => {
+    if (!loc || !loc.latitude || !loc.longitude) return false;
+    const pingTime = Number(loc.last_ping) || (loc.updated_at ? new Date(loc.updated_at).getTime() : now);
+    return loc.active !== false && (now - pingTime) < 60 * 60 * 1000;
+  });
 
   if (countBadge) countBadge.textContent = activeList.length;
 
@@ -10598,11 +10644,17 @@ function renderFleetRadarData(motoboyLocations) {
         <div style="text-align: center; padding: 24px 10px; color: #94a3b8; font-size: 0.85rem;">
           <i class="fa-solid fa-motorcycle" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 8px;"></i>
           <p>Nenhum entregador transmitindo GPS no momento.<br><small>Assim que o motoboy abrir o link da corrida, sua moto aparecerá aqui ao vivo.</small></p>
+          <div style="margin-top: 14px;">
+            <button type="button" class="btn-sm" onclick="testOrSimulateMotoboyGps()" style="background: #0284c7; color: #fff; border: none; border-radius: 6px; padding: 8px 14px; font-weight: 700; cursor: pointer;">
+              <i class="fa-solid fa-play"></i> Testar Radar GPS
+            </button>
+          </div>
         </div>
       `;
     } else {
       listEl.innerHTML = activeList.map(loc => {
-        const secsAgo = Math.max(1, Math.round((now - (loc.last_ping || 0)) / 1000));
+        const pingTime = Number(loc.last_ping) || (loc.updated_at ? new Date(loc.updated_at).getTime() : now);
+        const secsAgo = Math.max(1, Math.round((now - pingTime) / 1000));
         const timeText = secsAgo < 60 ? `há ${secsAgo}s` : `há ${Math.round(secsAgo/60)} min`;
         const waUrl = window.VIPMotoboyTracker
           ? window.VIPMotoboyTracker.buildMotoboyWhatsAppUrl(loc.phone, loc.order_id)
@@ -10639,10 +10691,20 @@ function renderFleetRadarData(motoboyLocations) {
 
   // Atualiza marcadores no mapa Leaflet
   if (fleetRadarMap) {
+    const presentIds = new Set(activeList.map(l => String(l.motoboy_id)));
+
+    // Remove marcadores que não estão mais na lista ativa
+    Object.keys(fleetMotoboyMarkers).forEach(mId => {
+      if (!presentIds.has(String(mId))) {
+        fleetRadarMap.removeLayer(fleetMotoboyMarkers[mId]);
+        delete fleetMotoboyMarkers[mId];
+      }
+    });
+
     activeList.forEach(loc => {
-      const lat = loc.latitude;
-      const lng = loc.longitude;
-      const heading = loc.heading || 0;
+      const lat = Number(loc.latitude);
+      const lng = Number(loc.longitude);
+      const heading = Number(loc.heading) || 0;
       const waUrl = window.VIPMotoboyTracker
         ? window.VIPMotoboyTracker.buildMotoboyWhatsAppUrl(loc.phone, loc.order_id)
         : `https://wa.me/55${(loc.phone || '').replace(/\D/g, '')}`;
@@ -10671,10 +10733,105 @@ function renderFleetRadarData(motoboyLocations) {
       } else {
         fleetMotoboyMarkers[loc.motoboy_id].setLatLng([lat, lng]);
         fleetMotoboyMarkers[loc.motoboy_id].setPopupContent(popupHtml);
+        const iconEl = fleetMotoboyMarkers[loc.motoboy_id].getElement();
+        if (iconEl) {
+          const inner = iconEl.querySelector("div");
+          if (inner) inner.style.transform = `rotate(${heading}deg)`;
+        }
       }
     });
   }
 }
+
+// ==============================================================================
+// SIMULADOR & TESTE DO RADAR GPS (DEMONSTRAÇÃO / TESTES DA LOJA)
+// ==============================================================================
+let _fleetSimInterval = null;
+let _fleetSimStep = 0;
+
+window.testOrSimulateMotoboyGps = async function() {
+  const btnSim = document.getElementById("btn-sim-radar-action");
+  if (_fleetSimInterval) {
+    clearInterval(_fleetSimInterval);
+    _fleetSimInterval = null;
+    if (btnSim) {
+      btnSim.innerHTML = `<i class="fa-solid fa-play"></i> Testar Radar / Simular GPS`;
+      btnSim.style.background = "#0284c7";
+    }
+    showToastNotification("Simulação do Radar GPS finalizada.");
+    return;
+  }
+
+  const simPoints = [
+    { lat: -22.75735, lng: -43.47254, heading: 90, speed: 18, name: "Saída da Salgados VIP" },
+    { lat: -22.75670, lng: -43.47120, heading: 75, speed: 28, name: "Rua Bernardino de Melo" },
+    { lat: -22.75580, lng: -43.46980, heading: 60, speed: 35, name: "Av. Marechal Floriano Peixoto" },
+    { lat: -22.75470, lng: -43.46790, heading: 45, speed: 32, name: "Próximo à Estação Nova Iguaçu" },
+    { lat: -22.75340, lng: -43.46610, heading: 30, speed: 27, name: "Via Light sentido Centro" },
+    { lat: -22.75210, lng: -43.46500, heading: 35, speed: 20, name: "Chegando ao Endereço do Cliente" }
+  ];
+
+  _fleetSimStep = 0;
+  if (btnSim) {
+    btnSim.innerHTML = `<i class="fa-solid fa-stop"></i> Parar Simulação GPS`;
+    btnSim.style.background = "#dc2626";
+  }
+  showToastNotification("🚀 Iniciando simulação do motoboy em tempo real...");
+
+  const simMotoboyId = "mb-1795449221667"; // Jonathas
+  const simMotoboyName = "Jonathas (Ao Vivo)";
+
+  const runStep = async () => {
+    const pt = simPoints[_fleetSimStep % simPoints.length];
+    _fleetSimStep++;
+
+    const payload = {
+      motoboy_id: simMotoboyId,
+      order_id: "VIP-1021",
+      motoboy_name: simMotoboyName,
+      phone: "21986758102",
+      latitude: pt.lat,
+      longitude: pt.lng,
+      heading: pt.heading,
+      speed: pt.speed,
+      accuracy: 5,
+      route_waypoints: [],
+      destination_lat: -22.75210,
+      destination_lng: -43.46500,
+      destination_address: "Rua Bento Lima, Nº 246 - Parque Ulisses, Nova Iguaçu",
+      status: "em_rota",
+      active: true,
+      last_ping: Date.now(),
+      updated_at: new Date().toISOString()
+    };
+
+    // 1. Grava no Supabase
+    const sb = (window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function")
+      ? window.VIPDatabase.getSupabaseClient()
+      : null;
+    if (sb) {
+      await sb.from("motoboy_locations").upsert(payload, { onConflict: "motoboy_id" }).catch(() => {});
+    }
+
+    // 2. BroadcastChannel para sincronizar abas do mesmo navegador instantaneamente
+    if (typeof BroadcastChannel !== "undefined") {
+      try {
+        const bc = new BroadcastChannel("salgados_vip_bus");
+        bc.postMessage({ type: "MOTOBOY_LOCATION_UPDATE", payload, timestamp: Date.now() });
+        setTimeout(() => bc.close(), 100);
+      } catch (e) {}
+    }
+
+    // 3. Atualiza radar da loja
+    renderFleetRadarData([payload]);
+    if (fleetRadarMap && fleetMotoboyMarkers[simMotoboyId]) {
+      fleetRadarMap.panTo([pt.lat, pt.lng]);
+    }
+  };
+
+  await runStep();
+  _fleetSimInterval = setInterval(runStep, 3000);
+};
 
 window.focusRadarOnMotoboy = function(motoboyId) {
   if (fleetRadarMap && fleetMotoboyMarkers[motoboyId]) {

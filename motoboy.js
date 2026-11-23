@@ -74,17 +74,44 @@
   // ============================================================================
   async function loadMotoboyProfile() {
     let mb = null;
+    const effectiveMbId = paramMotoboyId || localStorage.getItem("vip_active_motoboy_id");
 
-    if (paramMotoboyId && window.VIPDatabase && typeof window.VIPDatabase.getMotoboyById === "function") {
-      mb = window.VIPDatabase.getMotoboyById(paramMotoboyId);
+    if (effectiveMbId && window.VIPDatabase && typeof window.VIPDatabase.getMotoboyById === "function") {
+      mb = window.VIPDatabase.getMotoboyById(effectiveMbId);
     }
 
     // Busca no Supabase se não estiver no cache local
-    if (!mb && paramMotoboyId && window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function") {
+    if (!mb && effectiveMbId && window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function") {
       const sb = window.VIPDatabase.getSupabaseClient();
       if (sb) {
         try {
-          const { data } = await sb.from("delivery_men").select("*").eq("id", paramMotoboyId).maybeSingle();
+          const { data } = await sb.from("delivery_men").select("*").eq("id", effectiveMbId).maybeSingle();
+          if (data) {
+            mb = {
+              id: data.id,
+              name: data.name,
+              phone: data.phone,
+              vehicle: data.vehicle,
+              defaultFee: Number(data.default_fee) || 7
+            };
+          }
+        } catch (e) {}
+      }
+    }
+
+    // Se ainda não identificou, busca o primeiro motoboy cadastrado no sistema (ex: Jonathas)
+    if (!mb && window.VIPDatabase && typeof window.VIPDatabase.getMotoboys === "function") {
+      const allMb = window.VIPDatabase.getMotoboys();
+      if (Array.isArray(allMb) && allMb.length > 0) {
+        mb = allMb[0];
+      }
+    }
+
+    if (!mb && window.VIPDatabase && typeof window.VIPDatabase.getSupabaseClient === "function") {
+      const sb = window.VIPDatabase.getSupabaseClient();
+      if (sb) {
+        try {
+          const { data } = await sb.from("delivery_men").select("*").order("created_at", { ascending: true }).limit(1).maybeSingle();
           if (data) {
             mb = {
               id: data.id,
@@ -100,15 +127,19 @@
 
     if (!mb) {
       mb = {
-        id: paramMotoboyId || "mb-1",
-        name: "Entregador VIP",
-        phone: "(21) 98123-4567",
-        vehicle: "Moto",
-        defaultFee: 7.00
+        id: "mb-1795449221667",
+        name: "Jonathas",
+        phone: "21986758102",
+        vehicle: "Fluo",
+        defaultFee: 6.00
       };
     }
 
     currentMotoboy = mb;
+    try {
+      localStorage.setItem("vip_active_motoboy_id", mb.id);
+    } catch (e) {}
+
     const profileLabel = document.getElementById("motoboy-profile-label");
     if (profileLabel) {
       profileLabel.textContent = `${mb.name} • ${mb.vehicle || 'Moto'}`;
@@ -235,10 +266,13 @@
       attributionControl: false
     });
 
-    // Camada de Tiles escura e de alto contraste
-    L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-      maxZoom: 19
+    // Camada de mapa 100% gratuita OpenStreetMap (sem exigência de API Key e sem custos)
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "© OpenStreetMap contributors"
     }).addTo(leafletMap);
+
+    setTimeout(() => { if (leafletMap) leafletMap.invalidateSize(); }, 250);
 
     // Marcador da Loja (Base)
     const storeIcon = L.divIcon({
@@ -447,10 +481,15 @@
   // 6. TRANSMISSOR GPS EM TEMPO REAL
   // ============================================================================
   function startGpsTracking() {
-    if (!window.VIPMotoboyTracker) return;
+    if (!window.VIPMotoboyTracker || !currentMotoboy) return;
 
     const gpsPill = document.getElementById("gps-status-pill");
     const gpsText = document.getElementById("gps-status-text");
+    const actionBar = document.getElementById("gps-action-bar");
+    const actionTitle = document.getElementById("gps-action-title");
+    const actionSub = document.getElementById("gps-action-sub");
+    const btnTrigger = document.getElementById("btn-gps-trigger");
+    const iconEl = document.getElementById("gps-action-icon");
 
     window.VIPMotoboyTracker.startTransmitter({
       motoboyId: currentMotoboy.id,
@@ -463,7 +502,7 @@
       onUpdate: (data) => {
         motoboyCoords = { lat: data.latitude, lng: data.longitude };
 
-        // Atualiza status visual do GPS
+        // Atualiza status visual do GPS no header
         if (gpsPill) {
           gpsPill.className = "gps-status-pill";
           if (gpsText) {
@@ -472,17 +511,68 @@
           }
         }
 
+        // Atualiza barra de controle do GPS
+        if (actionBar) actionBar.classList.add("active");
+        if (actionTitle) actionTitle.textContent = "GPS Transmitindo em Tempo Real";
+        if (actionSub) {
+          const spd = data.speed || 0;
+          actionSub.textContent = `Sinal exato transmitido para a loja e cliente (${spd} km/h)`;
+        }
+        if (btnTrigger) {
+          btnTrigger.classList.add("success");
+          btnTrigger.innerHTML = `<i class="fa-solid fa-arrows-rotate"></i> Atualizar Local`;
+        }
+        if (iconEl) iconEl.style.color = "#10b981";
+
         // Atualiza ou cria o marcador da moto no Leaflet com rotação de heading
         updateMotoboyMarker(data.latitude, data.longitude, data.heading);
+
+        // Se estiver longe da rota, recalcula
+        if (currentRouteMode === "auto" && destinationCoords) {
+          recalculateRoute();
+        }
       },
       onError: (err) => {
         if (gpsPill) {
           gpsPill.className = "gps-status-pill waiting";
           if (gpsText) gpsText.textContent = "Aguardando GPS...";
         }
+        if (actionTitle) actionTitle.textContent = "Toque para Ativar GPS";
+        if (actionSub) actionSub.textContent = "Permissão necessária no navegador para o radar da loja.";
+        if (btnTrigger) {
+          btnTrigger.classList.remove("success");
+          btnTrigger.innerHTML = `<i class="fa-solid fa-location-arrow"></i> Ativar GPS`;
+        }
       }
     });
   }
+
+  window.handleManualGpsActivation = function() {
+    if (!navigator.geolocation) {
+      alert("Seu navegador ou dispositivo não possui suporte a GPS.");
+      return;
+    }
+
+    const btnTrigger = document.getElementById("btn-gps-trigger");
+    if (btnTrigger) btnTrigger.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Obtendo GPS...`;
+
+    // Chamada explícita disparada por clique do motoboy (satisfaz políticas de permissão do navegador)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        startGpsTracking();
+      },
+      (err) => {
+        console.warn("Aviso na ativação manual do GPS:", err);
+        alert("Atenção: Por favor, permita o acesso à localização neste site para que seu radar funcione em tempo real com a loja.");
+        startGpsTracking();
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0
+      }
+    );
+  };
 
   function updateMotoboyMarker(lat, lng, heading) {
     if (!leafletMap) return;

@@ -606,7 +606,7 @@
             const { data, error } = await sb
               .from("motoboy_locations")
               .select("*")
-              .eq("active", true);
+              .order("updated_at", { ascending: false });
 
             if (!error && Array.isArray(data) && !isCleanedUp) {
               callback(data);

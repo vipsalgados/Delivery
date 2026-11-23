@@ -580,9 +580,13 @@
           attributionControl: false
         });
 
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
-          maxZoom: 19
+        // Camada de mapa 100% gratuita OpenStreetMap sem exigir API Key
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap contributors"
         }).addTo(_customerMap);
+
+        setTimeout(() => { if (_customerMap) _customerMap.invalidateSize(); }, 200);
 
         // Marcador da Cozinha
         const storeIcon = L.divIcon({

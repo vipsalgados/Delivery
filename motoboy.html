@@ -130,6 +130,54 @@
       100% { opacity: 1; transform: scale(1); }
     }
 
+    /* BARRA DE CONTROLE & STATUS GPS AO VIVO */
+    .gps-action-bar {
+      background: linear-gradient(135deg, #1e293b, #0f172a);
+      border-bottom: 2px solid #f59e0b;
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      position: sticky;
+      top: 63px;
+      z-index: 900;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: all 0.3s ease;
+    }
+
+    .gps-action-bar.active {
+      border-bottom-color: #10b981;
+      background: linear-gradient(135deg, #064e3b, #0f172a);
+    }
+
+    .btn-gps-trigger {
+      background: #f59e0b;
+      color: #000;
+      font-weight: 800;
+      font-size: 0.82rem;
+      border: none;
+      border-radius: 8px;
+      padding: 9px 14px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .btn-gps-trigger:active {
+      transform: scale(0.97);
+    }
+
+    .btn-gps-trigger.success {
+      background: #10b981;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+    }
+
     /* CONTAINER PRINCIPAL */
     .motoboy-container {
       flex: 1;
@@ -552,6 +600,20 @@
     </div>
   </header>
 
+  <!-- BARRA DE CONTROLE & STATUS DO GPS -->
+  <div class="gps-action-bar" id="gps-action-bar">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <i class="fa-solid fa-satellite-dish" style="color: #f59e0b; font-size: 1.2rem;" id="gps-action-icon"></i>
+      <div>
+        <div style="font-weight: 700; font-size: 0.84rem; color: #fff;" id="gps-action-title">GPS Pronto para Ativação</div>
+        <div style="font-size: 0.72rem; color: #94a3b8;" id="gps-action-sub">Toque ao lado para transmitir ao vivo para a loja e cliente</div>
+      </div>
+    </div>
+    <button type="button" class="btn-gps-trigger" id="btn-gps-trigger" onclick="handleManualGpsActivation()">
+      <i class="fa-solid fa-location-arrow"></i> Ativar GPS
+    </button>
+  </div>
+
   <!-- CONTAINER -->
   <main class="motoboy-container">
 
@@ -670,9 +732,9 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=66.0"></script>
-  <script src="vip-delivery-men.js?v=66.0"></script>
-  <script src="vip-motoboy-tracker.js?v=66.0"></script>
-  <script src="motoboy.js?v=66.0"></script>
+  <script src="shared-data.js?v=67.0"></script>
+  <script src="vip-delivery-men.js?v=67.0"></script>
+  <script src="vip-motoboy-tracker.js?v=67.0"></script>
+  <script src="motoboy.js?v=67.0"></script>
 </body>
 </html>
