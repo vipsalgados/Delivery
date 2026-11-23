@@ -668,8 +668,18 @@ function initOrdersWatcher() {
       renderCategoriesTable();
       renderProductsTable();
       renderDeliveryModule();
+      if (typeof renderMotoboysView === "function") renderMotoboysView();
+      if (typeof updateMotoboyBadgeCount === "function") updateMotoboyBadgeCount();
       populateSettingsForm(false);
       populatePrinterSettings(false);
+    });
+
+    window.addEventListener("vip_delivery_men_updated", () => {
+      if (typeof renderMotoboysView === "function") renderMotoboysView();
+      if (typeof updateMotoboyBadgeCount === "function") updateMotoboyBadgeCount();
+      if (typeof renderCashClosingView === "function" && document.getElementById("tab-caixa")?.classList.contains("active")) {
+        renderCashClosingView();
+      }
     });
   }
 }
@@ -9476,7 +9486,7 @@ window.closeMotoboyModal = function() {
   }, 200);
 };
 
-window.saveMotoboyFromModal = function() {
+window.saveMotoboyFromModal = async function() {
   const id = document.getElementById("motoboy-id").value;
   const name = document.getElementById("motoboy-name").value.trim();
   const phone = document.getElementById("motoboy-phone").value.trim();
@@ -9508,34 +9518,58 @@ window.saveMotoboyFromModal = function() {
     notes
   };
 
-  if (id) {
-    VIPDatabase.updateMotoboy(id, payload);
-    showToastNotification(`Entregador "${name}" atualizado com sucesso!`);
-  } else {
-    VIPDatabase.addMotoboy(payload);
-    showToastNotification(`Entregador "${name}" cadastrado com sucesso!`);
+  try {
+    if (id) {
+      if (window.VIPDeliveryMenDB) {
+        await window.VIPDeliveryMenDB.update(id, payload);
+      } else {
+        VIPDatabase.updateMotoboy(id, payload);
+      }
+      showToastNotification(`Entregador "${name}" atualizado com sucesso!`);
+    } else {
+      if (window.VIPDeliveryMenDB) {
+        await window.VIPDeliveryMenDB.add(payload);
+      } else {
+        VIPDatabase.addMotoboy(payload);
+      }
+      showToastNotification(`Entregador "${name}" cadastrado com sucesso!`);
+    }
+  } catch (err) {
+    console.error("Erro ao salvar entregador:", err);
+    showToastNotification("Erro ao salvar entregador no banco.", "error");
   }
 
   closeMotoboyModal();
   renderMotoboysView();
+  updateMotoboyBadgeCount();
 };
 
-window.toggleMotoboyStatus = function(id) {
+window.toggleMotoboyStatus = async function(id) {
   const motoboy = VIPDatabase.getMotoboyById(id);
   if (!motoboy) return;
   const newStatus = !motoboy.active;
-  VIPDatabase.updateMotoboy(id, { active: newStatus });
+  if (window.VIPDeliveryMenDB) {
+    await window.VIPDeliveryMenDB.update(id, { active: newStatus });
+  } else {
+    VIPDatabase.updateMotoboy(id, { active: newStatus });
+  }
   showToastNotification(`Entregador "${motoboy.name}" agora está ${newStatus ? 'ATIVO' : 'EM PAUSA'}.`);
   renderMotoboysView();
+  updateMotoboyBadgeCount();
 };
 
-window.deleteMotoboyConfirm = function(id) {
+window.deleteMotoboyConfirm = async function(id) {
   const motoboy = VIPDatabase.getMotoboyById(id);
   if (!motoboy) return;
   if (confirm(`Deseja realmente remover o entregador "${motoboy.name}" do sistema?`)) {
-    VIPDatabase.deleteMotoboy(id);
+    if (window.VIPDeliveryMenDB) {
+      await window.VIPDeliveryMenDB.delete(id);
+    } else {
+      VIPDatabase.deleteMotoboy(id);
+    }
     showToastNotification(`Entregador removido com sucesso.`);
     renderMotoboysView();
+    updateMotoboyBadgeCount();
   }
 };
 

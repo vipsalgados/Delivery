@@ -5,7 +5,7 @@
  * ==============================================================================
  */
 
-window.VIP_APP_VERSION = "v63.0 (Bkp 63)";
+window.VIP_APP_VERSION = "v64.0 (Bkp 64)";
 
 // Helper universal de sanitização HTML contra XSS
 function escapeHtml(str) {
@@ -1552,7 +1552,7 @@ const VIPDatabase = {
       if (!order.history) order.history = [];
       order.history.push({ status: newStatus, time: Date.now() });
       this.saveOrders(orders);
-      this.pushOrderStatusToSupabase(orderId, newStatus, order.history);
+      this.pushOrderStatusToSupabase(orderId, newStatus, order.history, order.deliveryMan);
     }
     return orders;
   },
@@ -1667,67 +1667,30 @@ const VIPDatabase = {
   },
 
   // ==============================================================================
-  // GESTÃO DE ENTREGADORES (MOTOBOYS)
+  // GESTÃO DE ENTREGADORES (MOTOBOYS) - INTEGRAÇÃO COM BANCO ISOLADO
   // ==============================================================================
   getMotoboys() {
-    const raw = localStorage.getItem(STORAGE_KEYS.MOTOBOYS);
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.getAll === "function") {
+      return window.VIPDeliveryMenDB.getAll();
+    }
+    const raw = localStorage.getItem("salgados_vip_delivery_men_v64") || localStorage.getItem(STORAGE_KEYS.MOTOBOYS);
     if (!raw) {
-      const defaultList = [
-        {
-          id: "mb-1",
-          name: "Carlos Henrique",
-          phone: "(21) 98123-4567",
-          vehicle: "Honda CG 160 (Placa: BRA2E19)",
-          feeType: "fixed",
-          dailyRate: 50.00,
-          defaultFee: 7.00,
-          workDays: [1, 2, 3, 4, 5, 6], // Segunda a Sábado
-          pixKey: "carlos.motoboy@email.com",
-          pixType: "E-mail",
-          active: true,
-          notes: "Disponível no turno da noite (Seg a Sáb)",
-          createdAt: Date.now() - 86400000 * 5
-        },
-        {
-          id: "mb-2",
-          name: "Marcos Paulo",
-          phone: "(21) 97654-3210",
-          vehicle: "Yamaha Fazer 250 (Placa: VIP8A44)",
-          feeType: "fixed",
-          dailyRate: 60.00,
-          defaultFee: 8.00,
-          workDays: [5, 6, 0], // Sexta, Sábado e Domingo
-          pixKey: "21976543210",
-          pixType: "Telefone",
-          active: true,
-          notes: "Finais de semana e horários de pico (Sex, Sáb e Dom)",
-          createdAt: Date.now() - 86400000 * 2
-        }
-      ];
-      this.saveMotoboys(defaultList);
-      return defaultList;
+      return [];
     }
     try {
-      const list = JSON.parse(raw) || [];
-      // Garante retrocompatibilidade para motoboys existentes
-      return list.map(m => {
-        let workDays = m.workDays;
-        if (!Array.isArray(workDays) || workDays.length === 0) {
-          workDays = [0, 1, 2, 3, 4, 5, 6];
-        }
-        return {
-          ...m,
-          workDays,
-          dailyRate: typeof m.dailyRate === "number" ? m.dailyRate : (parseFloat(m.dailyRate) || 0.00),
-          defaultFee: typeof m.defaultFee === "number" ? m.defaultFee : (parseFloat(m.defaultFee) || 7.00)
-        };
-      });
+      return JSON.parse(raw) || [];
     } catch (e) {
       return [];
     }
   },
   saveMotoboys(list) {
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.saveLocal === "function") {
+      window.VIPDeliveryMenDB.saveLocal(list, true);
+      window.VIPDeliveryMenDB.backupToStoreSettings(list).catch(() => {});
+      return list;
+    }
     try {
+      localStorage.setItem("salgados_vip_delivery_men_v64", JSON.stringify(list || []));
       localStorage.setItem(STORAGE_KEYS.MOTOBOYS, JSON.stringify(list || []));
     } catch (e) {
       console.warn("[VIPDatabase] Erro ao salvar entregadores:", e);
@@ -1735,10 +1698,16 @@ const VIPDatabase = {
     return list;
   },
   getMotoboyById(id) {
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.getById === "function") {
+      return window.VIPDeliveryMenDB.getById(id);
+    }
     const list = this.getMotoboys();
-    return list.find(m => m.id === id) || null;
+    return list.find(m => String(m.id) === String(id)) || null;
   },
   addMotoboy(data) {
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.add === "function") {
+      return window.VIPDeliveryMenDB.add(data);
+    }
     const list = this.getMotoboys();
     const newId = `mb-${Date.now()}`;
     const workDays = Array.isArray(data.workDays) && data.workDays.length > 0 
@@ -1758,15 +1727,19 @@ const VIPDatabase = {
       pixType: data.pixType || "Chave Aleatória",
       active: data.active !== false,
       notes: (data.notes || "").trim(),
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
     list.push(motoboy);
     this.saveMotoboys(list);
     return motoboy;
   },
   updateMotoboy(id, data) {
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.update === "function") {
+      return window.VIPDeliveryMenDB.update(id, data);
+    }
     const list = this.getMotoboys();
-    const idx = list.findIndex(m => m.id === id);
+    const idx = list.findIndex(m => String(m.id) === String(id));
     if (idx >= 0) {
       const updatedWorkDays = Array.isArray(data.workDays) 
         ? data.workDays.map(Number) 
@@ -1791,8 +1764,11 @@ const VIPDatabase = {
     return null;
   },
   deleteMotoboy(id) {
+    if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.delete === "function") {
+      return window.VIPDeliveryMenDB.delete(id);
+    }
     let list = this.getMotoboys();
-    list = list.filter(m => m.id !== id);
+    list = list.filter(m => String(m.id) !== String(id));
     this.saveMotoboys(list);
     return true;
   },
@@ -2763,6 +2739,9 @@ const VIPDatabase = {
             if (row.id === "printer" && row.value) localStorage.setItem(STORAGE_KEYS.PRINTER, JSON.stringify(row.value));
             if (row.id === "catalog_order" && row.value) localStorage.setItem(STORAGE_KEYS.CATALOG_ORDER, JSON.stringify(row.value));
             if (row.id === "marketing" && row.value) localStorage.setItem(STORAGE_KEYS.MARKETING, JSON.stringify(row.value));
+            if (row.id === "delivery_men" && row.value && typeof window !== "undefined" && window.VIPDeliveryMenDB) {
+              window.VIPDeliveryMenDB.saveLocal(row.value, false);
+            }
             localStorage.removeItem(STORAGE_KEYS.AUTH);
           });
         }
@@ -2857,7 +2836,12 @@ const VIPDatabase = {
           localStorage.setItem(STORAGE_KEYS.ORDERS, JSON.stringify(mergedList));
         }
 
-        // 9. Registrar Canal Realtime no Supabase
+        // 9. Sincronização do Banco Isolado de Entregadores (Motoboys)
+        if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.syncFromCloud === "function") {
+          window.VIPDeliveryMenDB.syncFromCloud().catch(() => {});
+        }
+
+        // 10. Registrar Canal Realtime no Supabase
         this.subscribeRealtimeOrders();
 
         window.dispatchEvent(new CustomEvent("vip_supabase_synced", { detail: { success: true } }));
@@ -3012,6 +2996,11 @@ const VIPDatabase = {
         .on("postgres_changes", { event: "*", schema: "public", table: "store_settings" }, (payload) => {
           this.handleRealtimeCatalogPayload("store_settings", payload);
         })
+        .on("postgres_changes", { event: "*", schema: "public", table: "delivery_men" }, () => {
+          if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.syncFromCloud === "function") {
+            window.VIPDeliveryMenDB.syncFromCloud();
+          }
+        })
         .subscribe((status) => {
           console.log("[Supabase Realtime] Status do canal:", status);
           window.dispatchEvent(new CustomEvent("vip_supabase_status", { detail: { status } }));
@@ -3135,6 +3124,10 @@ const VIPDatabase = {
       } else if (rowNew && rowNew.id === "marketing" && rowNew.value) {
         try { localStorage.setItem(STORAGE_KEYS.MARKETING, JSON.stringify(rowNew.value)); } catch (e) {}
         window.dispatchEvent(new CustomEvent("vip_catalog_updated", { detail: { table: "marketing" } }));
+      } else if (rowNew && rowNew.id === "delivery_men") {
+        if (typeof window !== "undefined" && window.VIPDeliveryMenDB && typeof window.VIPDeliveryMenDB.syncFromCloud === "function") {
+          window.VIPDeliveryMenDB.syncFromCloud();
+        }
       }
     }
   },
@@ -3318,9 +3311,10 @@ const VIPDatabase = {
             localMap.set(mapped.id, mapped);
           } else {
             const existing = localMap.get(mapped.id);
+            const preservedDeliveryMan = mapped.deliveryMan || existing.deliveryMan || null;
             if (existing.status !== mapped.status || (mapped.deliveryMan && !existing.deliveryMan)) {
               hasChanges = true;
-              localMap.set(mapped.id, { ...existing, ...mapped });
+              localMap.set(mapped.id, { ...existing, ...mapped, deliveryMan: preservedDeliveryMan });
             }
           }
         });

@@ -19,9 +19,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cabinet+Grotesk:wght@700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="admin.css?v=63.0">
-  <link rel="stylesheet" href="pwa.css?v=63.0">
-  <link rel="stylesheet" href="vip-marketing.css?v=63.0">
+  <link rel="stylesheet" href="admin.css?v=64.0">
+  <link rel="stylesheet" href="pwa.css?v=64.0">
+  <link rel="stylesheet" href="vip-marketing.css?v=64.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <!-- Leaflet.js para Mapa Interativo de Entregas -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -845,7 +845,10 @@
             <h2><i class="fa-solid fa-motorcycle" style="color: #d97706;"></i> Gestão de Entregadores & Motoboys</h2>
             <p>Cadastre sua frota, gerencie dias da semana e valores de diária/corrida, despache pedidos e controle gastos por período.</p>
           </div>
-          <div class="pane-actions">
+          <div class="pane-actions" style="display: flex; align-items: center; gap: 10px;">
+            <span class="badge" id="motoboys-sync-badge" style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.78rem; padding: 6px 10px; border-radius: 6px; font-weight: 600;">
+              <i class="fa-solid fa-database"></i> Banco Isolado Ativo
+            </span>
             <button type="button" class="btn-primary-admin" onclick="openMotoboyModal()">
               <i class="fa-solid fa-plus"></i> Novo Entregador
             </button>
@@ -2227,7 +2230,7 @@
         </div>
         <div style="display: inline-flex; align-items: center; gap: 7px;">
           <span style="display: inline-block; width: 6px; height: 6px; background: #10b981; border-radius: 50%;" title="Sistema Online e Operante"></span>
-          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">v63.0 (Bkp 63)</span>
+          <span id="admin-footer-version" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-weight: 600; color: #64748b; background: #f8fafc; padding: 3px 9px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 0.74rem;">v64.0 (Bkp 64)</span>
         </div>
       </footer>
 
@@ -3460,7 +3463,7 @@
     </div>
   </div>
 <div id="thermal-receipt-area" class="thermal-receipt-area"></div>
-  <iframe id="vip-printer-iframe" style="position:fixed; right:-9999px; bottom:-9999px; width:1px; height:1px; border:0; visibility:hidden;" title="Thermal Printer Frame"></iframe>
+  <iframe id="vip-printer-iframe" style="position:fixed; left:0; top:0; width:100%; height:100%; border:0; opacity:0.001; pointer-events:none; z-index:-99999; visibility:visible;" title="Thermal Printer Frame"></iframe>
 
   <script src="supabase.min.js"></script>
   <script>
@@ -3468,12 +3471,13 @@
       document.write('<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"><\/script>');
     }
   </script>
-  <script src="shared-data.js?v=63.0"></script>
-  <script src="vip-whatsapp.js?v=63.0"></script>
-  <script src="vip-live-orders.js?v=63.0"></script>
-  <script src="vip-web-printer.js?v=63.0"></script>
-  <script src="admin.js?v=63.0"></script>
-  <script src="vip-marketing.js?v=63.0"></script>
-  <script src="pwa.js?v=63.0"></script>
+  <script src="shared-data.js?v=64.0"></script>
+  <script src="vip-delivery-men.js?v=64.0"></script>
+  <script src="vip-whatsapp.js?v=64.0"></script>
+  <script src="vip-live-orders.js?v=64.0"></script>
+  <script src="vip-web-printer.js?v=64.0"></script>
+  <script src="admin.js?v=64.0"></script>
+  <script src="vip-marketing.js?v=64.0"></script>
+  <script src="pwa.js?v=64.0"></script>
 </body>
 </html>
