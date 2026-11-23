@@ -14,6 +14,15 @@ WshShell.CurrentDirectory = ScriptDir
 
 PythonWPath = "C:\Users\Laura Barbosa\AppData\Local\Programs\Python\Python313\pythonw.exe"
 If Not FSO.FileExists(PythonWPath) Then
+    PythonWPath = WshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%\Programs\Python\Python313\pythonw.exe")
+End If
+If Not FSO.FileExists(PythonWPath) Then
+    PythonWPath = "C:\Users\Laura Barbosa\AppData\Local\Programs\Python\Launcher\pyw.exe"
+End If
+If Not FSO.FileExists(PythonWPath) Then
+    PythonWPath = WshShell.ExpandEnvironmentStrings("%LOCALAPPDATA%\Programs\Python\Launcher\pyw.exe")
+End If
+If Not FSO.FileExists(PythonWPath) Then
     PythonWPath = "pythonw.exe"
 End If
 

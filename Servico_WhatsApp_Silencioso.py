@@ -283,14 +283,18 @@ class WhatsAppBotManager:
                     # 2. Se não está logado, auto-recarrega se expirado e extrai o QR Code do Canvas
                     qr_data = self.driver.execute_script("""
                         try {
-                            // Se houver botão de recarregar QR code expirado, clica nele automaticamente
-                            const reloadBtn = document.querySelector('button[aria-label*="Recarregar"], button[aria-label*="recarregar"], button[aria-label*="Reload"], div[role="button"][data-ref], span[data-icon="refresh"]');
+                            // Se houver botão de recarregar QR code expirado (apenas se realmente for botão de recarga)
+                            const reloadBtn = document.querySelector('button[aria-label*="Recarregar"], button[aria-label*="recarregar"], button[aria-label*="Reload"], span[data-icon="refresh"], span[data-icon="reload"]');
                             if (reloadBtn) {
                                 reloadBtn.click();
                             }
                             const canvas = document.querySelector('canvas');
-                            if (canvas) {
+                            if (canvas && canvas.width > 20 && canvas.height > 20) {
                                 return canvas.toDataURL('image/png');
+                            }
+                            const img = document.querySelector('img[alt*="QR"], img[src*="data:image/png"]');
+                            if (img && img.src && img.src.startsWith('data:image')) {
+                                return img.src;
                             }
                         } catch (e) {}
                         return null;

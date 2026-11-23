@@ -1933,15 +1933,15 @@ const VIPWhatsAppGateway = {
 
           if (row && row.value) {
             const val = row.value;
-            const isFresh = val.lastHeartbeat && (Date.now() - val.lastHeartbeat < 45000);
-            if (isFresh && val.online) {
+            const isFresh = val.lastHeartbeat && (Date.now() - val.lastHeartbeat < 180000); // Até 3 min
+            if ((isFresh || val.hasQr || val.qrCode) && val.online) {
               this.config.connected = Boolean(val.connected);
               this.lastStatus = {
                 online: true,
                 connected: Boolean(val.connected),
-                status: val.status || (val.connected ? "connected" : "disconnected"),
+                status: val.status || (val.connected ? "connected" : (val.qrCode ? "qr_ready" : "disconnected")),
                 statusText: val.statusText || (val.connected ? "Conectado e pronto" : "Aguardando QR Code"),
-                hasQr: Boolean(val.hasQr),
+                hasQr: Boolean(val.hasQr || val.qrCode),
                 qrCode: val.qrCode || null,
                 mode: "cloud_sync"
               };
@@ -1965,8 +1965,24 @@ const VIPWhatsAppGateway = {
     }
   },
 
+  // Dispara o protocolo do Windows salgadosvip-wa:start para inicializar o robô silencioso em segundo plano
+  triggerProtocolLaunch() {
+    try {
+      const iframe = document.createElement("iframe");
+      iframe.style.display = "none";
+      iframe.src = "salgadosvip-wa:start";
+      document.body.appendChild(iframe);
+      setTimeout(() => {
+        try { document.body.removeChild(iframe); } catch(e) {}
+      }, 3000);
+    } catch(e) {}
+  },
+
   // Conecta e exibe o QR Code na tela com carregamento inteligente e contínuo
   async connectAndShowQR() {
+    // 0. Dispara inicialização do serviço local no Windows se ainda não estiver aberto
+    this.triggerProtocolLaunch();
+
     const paneOffline = document.getElementById("wa-silent-status-offline");
     const paneQr = document.getElementById("wa-silent-status-qr");
     const paneConnected = document.getElementById("wa-silent-status-connected");
@@ -2043,9 +2059,9 @@ const VIPWhatsAppGateway = {
       return;
     }
 
-    // Polling ativo de inicialização (aguarda até 40s para carregar o WhatsApp Web)
+    // Polling ativo de inicialização (aguarda até 50s para carregar o WhatsApp Web)
     let attempts = 0;
-    const maxAttempts = 26; // 26 * 1.5s = 39 segundos
+    const maxAttempts = 35; // 35 * 1.5s = 52.5 segundos
     if (this.initPollTimer) clearInterval(this.initPollTimer);
 
     this.initPollTimer = setInterval(async () => {
@@ -2284,6 +2300,18 @@ window.disconnectWhatsAppWeb = window.disconnectWhatsAppCloud = function() {
   VIPWhatsAppGateway.disconnect();
 };
 
+window.launchWhatsAppLocalService = function() {
+  if (VIPWhatsAppGateway && typeof VIPWhatsAppGateway.triggerProtocolLaunch === "function") {
+    VIPWhatsAppGateway.triggerProtocolLaunch();
+  }
+  if (typeof showToastNotification === "function") {
+    showToastNotification("Disparando inicialização do robô WhatsApp no Windows...");
+  }
+  setTimeout(() => {
+    startWhatsAppWebConnect();
+  }, 1000);
+};
+
 // Stubs para evitar qualquer ReferenceError de chamadas legadas
 window.selectWhatsAppProvider = function() {};
 window.saveWhatsAppCloudConfig = function() {};
@@ -2321,7 +2349,7 @@ window.checkWhatsAppSilentServiceStatus = async function(showFeedback = false) {
     if (showFeedback && typeof showToastNotification === "function") {
       showToastNotification("✓ WhatsApp conectado e ativo para envio silencioso em qualquer máquina!");
     }
-  } else if (status && status.status === "qr_ready") {
+  } else if (status && (status.status === "qr_ready" || status.hasQr || status.qrCode)) {
     if (badgeEl) {
       badgeEl.className = "wa-status-pill qr";
       badgeEl.innerHTML = `<i class="fa-solid fa-qrcode"></i> QR Code Pronto`;
@@ -2329,6 +2357,9 @@ window.checkWhatsAppSilentServiceStatus = async function(showFeedback = false) {
     if (paneQr) paneQr.style.display = "block";
     if (paneConnected) paneConnected.style.display = "none";
     if (paneOffline) paneOffline.style.display = "none";
+    if (status.qrCode) {
+      VIPWhatsAppGateway.displayReadyQR(status.qrCode);
+    }
   } else {
     if (badgeEl) {
       badgeEl.className = "wa-status-pill offline";
